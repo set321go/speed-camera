@@ -55,7 +55,7 @@ progVer = "9.09"
 # Temporarily put these variables here so config.py does not need updating
 # These are required for sqlite3 speed_cam.db database.
 # Will work on reports and possibly a web query page for speed data.
-DB_DIR = "/home/pi/speed-camera/data"
+DB_DIR = "data"
 DB_NAME = "speed_cam.db"
 DB_TABLE = "speed"
 

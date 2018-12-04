@@ -8,9 +8,10 @@ I chose to create a second server so cgi-bin folder is not visible from
 the speed camera webserver.py directory browser at default media folder.
 '''
 import os
+import sys
 import socket
-import CGIHTTPServer
-import BaseHTTPServer
+from http.server import CGIHTTPRequestHandler
+from http.server import HTTPServer
 
 PROG_NAME = os.path.basename(__file__)
 PROG_VER = "0.1"
@@ -30,10 +31,10 @@ except:
     print("        Configure Network and Try Again")
     sys.exit(1)
 
-class Handler(CGIHTTPServer.CGIHTTPRequestHandler):
+class Handler(CGIHTTPRequestHandler):
     cgi_directories = [CGI_DIR]
 
-httpd = BaseHTTPServer.HTTPServer(("", PORT), Handler)
+httpd = HTTPServer(("", PORT), Handler)
 
 print("%s ver %s   written by Claude Pageau" % (PROG_NAME, PROG_VER))
 print("This server will process speed-camera cgi scripts at")

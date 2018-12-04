@@ -3,12 +3,12 @@
 import cgi
 import os
 import socket
-import SocketServer
+import socketserver
 import sys
 import time
 import urllib
-from SimpleHTTPServer import SimpleHTTPRequestHandler
-from StringIO import StringIO
+from http.server import SimpleHTTPRequestHandler
+from io import StringIO
 
 PROG_VER = "ver 7.6  written by Claude Pageau"
 '''
@@ -193,8 +193,8 @@ VALUE="Refresh">&nbsp;&nbsp;<b>%s</b></FORM>''' % list_title)
 
 # Start Web Server Processing
 os.chdir(web_server_root)
-SocketServer.TCPServer.allow_reuse_address = True
-httpd = SocketServer.TCPServer(("", web_server_port), DirectoryHandler)
+socketserver.TCPServer.allow_reuse_address = True
+httpd = socketserver.TCPServer(("", web_server_port), DirectoryHandler)
 print("----------------------------------------------------------------")
 print("%s %s" % (PROG_NAME, PROG_VER))
 print("---------------------------- Settings --------------------------")
