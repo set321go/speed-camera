@@ -81,38 +81,38 @@ startup_helpers.look_for_picam(config)
 
 QUOTE = '"'  # Used for creating quote delimited log file of speed data
 
-# setup buffer area to ensure contour is mostly contained in crop area
-x_buf = int((config.x_right - config.x_left) / config.x_buf_adjust)
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 def get_fps(start_time, frame_count):
     """ Calculate and display frames per second processing """
     if frame_count >= 1000:
         duration = float(time.time() - start_time)
-        FPS = float(frame_count / duration)
-        logging.info("%.2f fps Last %i Frames", FPS, frame_count)
+        fps = float(frame_count / duration)
+        logging.info("%.2f fps Last %i Frames", fps, frame_count)
         frame_count = 0
         start_time = time.time()
     else:
         frame_count += 1
     return start_time, frame_count
 
-#------------------------------------------------------------------------------
+
+# ------------------------------------------------------------------------------
 def get_image_name(path, prefix):
     """ build image file names by number sequence or date/time Added tenth of second"""
-    rightNow = datetime.datetime.now()
+    right_now = datetime.datetime.now()
     filename = ("%s/%s%04d%02d%02d-%02d%02d%02d%d.jpg" %
-                (path, prefix, rightNow.year, rightNow.month, rightNow.day,
-                 rightNow.hour, rightNow.minute, rightNow.second, rightNow.microsecond/100000))
+                (path, prefix, right_now.year, right_now.month, right_now.day,
+                 right_now.hour, right_now.minute, right_now.second, right_now.microsecond/100000))
     return filename
 
-#------------------------------------------------------------------------------
-def speed_get_contours(image, grayimage1):
+
+# ------------------------------------------------------------------------------
+def speed_get_contours(grayimage1):
     image_ok = False
     while not image_ok:
-        image = vs.read() # Read image data from video steam thread instance
+        image = vs.read()  # Read image data from video steam thread instance
         if config.WEBCAM:
-            if (config.WEBCAM_HFLIP and config.WEBCAM_VFLIP):
+            if config.WEBCAM_HFLIP and config.WEBCAM_VFLIP:
                 image = cv2.flip(image, -1)
             elif config.WEBCAM_HFLIP:
                 image = cv2.flip(image, 1)
@@ -150,19 +150,16 @@ def speed_get_contours(image, grayimage1):
     grayimage1 = grayimage2
     return grayimage1, contours
 
-#------------------------------------------------------------------------------
+
+# ------------------------------------------------------------------------------
 def speed_camera():
     """ Main speed camera processing function """
-    ave_speed = 0.0
     # initialize variables
     frame_count = 0
     fps_time = time.time()
     first_event = True   # Start a New Motion Track
-    event_timer = time.time()
     start_pos_x = None
     end_pos_x = None
-    prev_pos_x = None
-    travel_direction = ""
     font = cv2.FONT_HERSHEY_SIMPLEX
     # Calculate position of text on the images
     if config.image_text_bottom:
@@ -170,7 +167,7 @@ def speed_camera():
     else:
         text_y = 10  # show text at top of image
     # Initialize prev_image used for taking speed image photo
-    lastSpaceCheck = datetime.datetime.now()
+    last_space_check = datetime.datetime.now()
     speed_path = config.image_path
     csv = CSVStorageService(config)
     if config.calibrate:
@@ -179,7 +176,6 @@ def speed_camera():
     logging.info("Begin Motion Tracking .....")
     # initialize a cropped grayimage1 image
     image2 = vs.read()  # Get image from PiVideoSteam thread instance
-    prev_image = image2  # make a copy of the first image
     try:
         # crop image to motion tracking area only
         image_crop = image2[config.y_upper:config.y_lower, config.x_left:config.x_right]
@@ -195,8 +191,8 @@ def speed_camera():
     event_timer = time.time()
     still_scanning = True
     while still_scanning:  # process camera thread images and calculate speed
-        image2 = vs.read() # Read image data from video steam thread instance
-        grayimage1, contours = speed_get_contours(image2, grayimage1)
+        image2 = vs.read()  # Read image data from video steam thread instance
+        grayimage1, contours = speed_get_contours(grayimage1)
         # if contours found, find the one with biggest area
         if contours:
             total_contours = len(contours)
@@ -208,8 +204,8 @@ def speed_camera():
                 if found_area > biggest_area:
                     (x, y, w, h) = cv2.boundingRect(c)
                     # check if object contour is completely within crop area
-                    if x > x_buf and x + w < config.x_right - config.x_left - x_buf:
-                        cur_track_time = time.time() # record cur track time
+                    if x > config.get_x_buf() and x + w < config.x_right - config.x_left - config.get_x_buf():
+                        cur_track_time = time.time()  # record cur track time
                         track_x = x
                         track_y = y
                         track_w = w  # movement width of object contour
@@ -221,10 +217,8 @@ def speed_camera():
                 reset_time_diff = time.time() - event_timer
                 if reset_time_diff > config.event_timeout:
                     # event_timer exceeded so reset for new track
-                    event_timer = time.time()
                     first_event = True
                     start_pos_x = None
-                    prev_pos_x = None
                     end_pos_x = None
                     logging.info("Reset- event_timer %.2f>%.2f sec Exceeded",
                                  reset_time_diff, config.event_timeout)
@@ -233,10 +227,9 @@ def speed_camera():
                 ##############################
                 if first_event:   # This is a first valid motion event
                     first_event = False  # Only one first track event
-                    track_start_time = cur_track_time # Record track start time
+                    track_start_time = cur_track_time  # Record track start time
                     prev_start_time = cur_track_time
                     start_pos_x = track_x
-                    prev_pos_x = track_x
                     end_pos_x = track_x
                     logging.info("New  - 0/%i xy(%i,%i) Start New Track",
                                  config.track_counter, track_x, track_y)
@@ -252,8 +245,7 @@ def speed_camera():
                         travel_direction = "R2L"
                     # check if movement is within acceptable distance
                     # range of last event
-                    if (abs(end_pos_x - prev_pos_x) > config.x_diff_min and
-                            abs(end_pos_x - prev_pos_x) < config.x_diff_max):
+                    if config.x_diff_min < abs(end_pos_x - prev_pos_x) < config.x_diff_max:
                         track_count += 1  # increment
                         cur_track_dist = abs(end_pos_x - prev_pos_x)
                         cur_ave_speed = float((abs(cur_track_dist /
@@ -262,7 +254,6 @@ def speed_camera():
                                                          config.get_speed_conf())
                         speed_list.append(cur_ave_speed)
                         prev_start_time = cur_track_time
-                        event_timer = time.time()
                         if track_count >= config.track_counter:
                             tot_track_dist = abs(track_x - start_pos_x)
                             tot_track_time = abs(track_start_time - cur_track_time)
@@ -293,8 +284,9 @@ def speed_camera():
                                     # Check if subdirectories configured
                                     # and create as required
                                     speed_path = utils.subDirChecks(config.imageSubDirMaxHours,
-                                                              config.imageSubDirMaxFiles,
-                                                              config.image_path, config.image_prefix)
+                                                                    config.imageSubDirMaxFiles,
+                                                                    config.image_path,
+                                                                    config.image_prefix)
                                     # Create image file name prefix
                                     if config.image_filename_speed:
                                         speed_prefix = (str(int(round(ave_speed)))
@@ -342,7 +334,8 @@ def speed_camera():
                                                 (text_x, text_y),
                                                 font,
                                                 config.FONT_SCALE,
-                                                (cvWhite), 2)
+                                                cvWhite,
+                                                2)
                                 logging.info(" Saved %s", filename)
                                 # Save resized image
                                 cv2.imwrite(filename, big_image)
@@ -422,20 +415,20 @@ def speed_camera():
                                                        QUOTE))
                                     csv.write_line(log_csv_text)
                                 if config.spaceTimerHrs > 0:
-                                    lastSpaceCheck = utils.freeDiskSpaceCheck(lastSpaceCheck)
+                                    last_space_check = utils.freeDiskSpaceCheck(last_space_check, config)
                                 # Manage a maximum number of files
                                 # and delete oldest if required.
                                 if config.image_max_files > 0:
                                     utils.deleteOldFiles(config.image_max_files,
-                                                   speed_path,
-                                                   config.image_prefix)
+                                                         speed_path,
+                                                         config.image_prefix)
                                 # Save most recent files
                                 # to a recent folder if required
                                 if config.imageRecentMax > 0 and not config.calibrate:
                                     utils.saveRecent(config.imageRecentMax,
-                                               config.imageRecentDir,
-                                               filename,
-                                               config.image_prefix)
+                                                     config.imageRecentDir,
+                                                     filename,
+                                                     config.image_prefix)
 
                                 logging.info("End  - Ave Speed %.1f %s Tracked %i px in %.3f sec Calib %ipx %imm",
                                              ave_speed, config.get_speed_units(),
@@ -448,7 +441,6 @@ def speed_camera():
                                 if config.track_timeout > 0:
                                     logging.info("Sleep - %0.2f seconds to Clear Track"
                                                  % config.track_timeout)
-                                event_timer = time.time()
                                 time.sleep(config.track_timeout)
                             else:
                                 logging.info("End  - Skip Photo SPEED %.1f %s"
@@ -462,13 +454,12 @@ def speed_camera():
                                 if config.track_timeout > 0:
                                     logging.info("Sleep - %0.2f seconds to Clear Track"
                                                  % config.track_timeout)
-                                event_timer = time.time()
                                 time.sleep(config.track_timeout)
                             # Track Ended so Reset Variables ready for
                             # next tracking sequence
                             start_pos_x = None
                             end_pos_x = None
-                            first_event = True # Reset Track
+                            first_event = True  # Reset Track
                             track_count = 0
                             event_timer = time.time()
                         else:
@@ -542,6 +533,7 @@ def speed_camera():
             image_view = cv2.resize(image2, (config.get_image_width(), config.get_image_height()))
             cv2.imshow('Movement (q Quits)', image_view)
             if config.show_thresh_on:
+                # FIXME This variable is not available in this scope
                 cv2.imshow('Threshold', config.thresholdimage)
             if config.show_crop_on:
                 cv2.imshow('Crop Area', image_crop)
@@ -554,7 +546,8 @@ def speed_camera():
         if config.display_fps:   # Optionally show motion image processing loop fps
             fps_time, frame_count = get_fps(fps_time, frame_count)
 
-#------------------------------------------------------------------------------
+
+# ------------------------------------------------------------------------------
 if __name__ == '__main__':
     try:
         WEBCAM_TRIES = 0

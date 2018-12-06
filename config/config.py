@@ -152,6 +152,7 @@ class Config:
             logging.info("plugins not enabled")
             return None
 
+    # Ideally these values should be pre computed not calculated repeatedly at runtime
     def get_speed_units(self):
         return "mph" if self.SPEED_MPH else "kph"
 
@@ -165,6 +166,10 @@ class Config:
 
     def get_image_height(self):
         return int(self.WEBCAM_HEIGHT * self.image_bigger) if self.WEBCAM else int(self.CAMERA_HEIGHT * self.image_bigger)
+
+    def get_x_buf(self):
+        # setup buffer area to ensure contour is mostly contained in crop area
+        return int((self.x_right - self.x_left) / self.x_buf_adjust)
 
     def display_config_verbose(self):
         """Initialize and Display program variable settings from config.py"""
