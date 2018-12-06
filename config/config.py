@@ -1,5 +1,6 @@
 import os
 import configparser
+from config import config_validation
 
 
 class Config:
@@ -19,7 +20,7 @@ class Config:
         self.cal_obj_px = config.getint('DEFAULT', 'cal_obj_px', fallback=90)
         self.cal_obj_mm = config.getfloat('DEFAULT', 'cal_obj_mm', fallback=4700.0)
         self.pluginEnable = config.getboolean('DEFAULT', 'pluginEnable', fallback=False)
-        self.pluginName = config.get('DEFAULT', 'pluginName', fallback='picam240')
+        self.pluginName = config_validation.remove_python_extension(config.get('DEFAULT', 'pluginName', fallback='picam240'))
         self.x_left = config.getint('DEFAULT', 'x_left', fallback=25)
         self.x_right = config.getint('DEFAULT', 'x_right', fallback=295)
         self.y_upper = config.getint('DEFAULT', 'y_upper', fallback=75)
@@ -64,7 +65,7 @@ class Config:
         self.image_text_on = config.getboolean('CAMERA', 'image_text_on', fallback=True)
         self.image_text_bottom = config.getboolean('CAMERA', 'image_text_bottom', fallback=True)
         self.image_font_size = config.getint('CAMERA', 'image_font_size', fallback=12)
-        self.image_bigger = config.getfloat('CAMERA', 'image_bigger', fallback=3.0)
+        self.image_bigger = config_validation.enforce_lower_bound_float(config.getfloat('CAMERA', 'image_bigger', fallback=3.0), 1.0)
         self.image_max_files = config.getint('CAMERA', 'image_max_files', fallback=0)
         self.imageSubDirMaxFiles = config.getint('CAMERA', 'imageSubDirMaxFiles', fallback=1000)
         self.imageSubDirMaxHours = config.getint('CAMERA', 'imageSubDirMaxHours', fallback=0)
@@ -78,7 +79,7 @@ class Config:
         self.CIRCLE_SIZE = config.getint('CAMERA', 'CIRCLE_SIZE', fallback=5)
         self.LINE_THICKNESS = config.getint('CAMERA', 'LINE_THICKNESS', fallback=1)
         self.FONT_SCALE = config.getfloat('CAMERA', 'FONT_SCALE', fallback=0.5)
-        self.WINDOW_BIGGER = config.getfloat('CAMERA', 'WINDOW_BIGGER', fallback=1.0)
+        self.WINDOW_BIGGER = config_validation.enforce_lower_bound_float(config.getfloat('CAMERA', 'WINDOW_BIGGER', fallback=1.0), 1.0)
         self.BLUR_SIZE = config.getint('CAMERA', 'BLUR_SIZE', fallback=10)
         self.THRESHOLD_SENSITIVITY = config.getint('CAMERA', 'THRESHOLD_SENSITIVITY', fallback=20)
 

@@ -47,11 +47,10 @@ import glob
 import shutil
 import logging
 import sqlite3
-from threading import Thread
+import importlib
 from config.config import Config
-import subprocess
-
-progVer = "9.09"
+from config import app_constants
+from startup import startup_helpers
 
 # Temporarily put these variables here so config.py does not need updating
 # These are required for sqlite3 speed_cam.db database.
@@ -68,10 +67,9 @@ mypath = os.path.abspath(__file__)  # Find the full path of this python script
 # get the path location only (excluding script name)
 baseDir = mypath[0:mypath.rfind("/")+1]
 baseFileName = mypath[mypath.rfind("/")+1:mypath.rfind(".")]
-progName = os.path.basename(__file__)
 horz_line = "----------------------------------------------------------------------"
 print(horz_line)
-print("%s %s   written by Claude Pageau" % (progName, progVer))
+print("%s %s   written by Claude Pageau" % (app_constants.progName, app_constants.progVer))
 # Color data for OpenCV lines and text
 cvWhite = (255, 255, 255)
 cvBlack = (0, 0, 0)
@@ -81,42 +79,26 @@ cvRed = (0, 0, 255)
 
 config = Config(baseDir)
 
-# Now that variables are imported from config.py Setup Logging
-if config.loggingToFile:
-    logging.basicConfig(level=logging.DEBUG,
-                        format='%(asctime)s %(levelname)-8s %(funcName)-10s %(message)s',
-                        datefmt='%Y-%m-%d %H:%M:%S',
-                        filename=config.logFilePath,
-                        filemode='w')
-elif config.verbose:
-    logging.basicConfig(level=logging.DEBUG,
-                        format='%(asctime)s %(levelname)-8s %(funcName)-10s %(message)s',
-                        datefmt='%Y-%m-%d %H:%M:%S')
-else:
-    logging.basicConfig(level=logging.CRITICAL,
-                        format='%(asctime)s %(levelname)-8s %(funcName)-10s %(message)s',
-                        datefmt='%Y-%m-%d %H:%M:%S')
+startup_helpers.init_logger(config)
 
 from search_config import search_dest_path
 
+# This is hard to refactor because its dynamically loading files into the runtime
 # Import Settings from specified plugin if pluginEnable=True
 if config.pluginEnable:     # Check and verify plugin and load variable overlay
     pluginDir = os.path.join(baseDir, "plugins")
-    # Check if there is a .py at the end of pluginName variable
-    if config.pluginName.endswith('.py'):
-        pluginName = config.pluginName[:-3]    # Remove .py extensiion
-    pluginPath = os.path.join(pluginDir, pluginName + '.py')
+    pluginPath = os.path.join(pluginDir, config.pluginName + '.py')
     logging.info("pluginEnabled - loading pluginName %s", pluginPath)
     if not os.path.isdir(pluginDir):
         logging.error("plugin Directory Not Found at %s", pluginDir)
         logging.info("Rerun github curl install script to install plugins")
         logging.info("https://github.com/pageauc/pi-timolo/wiki/")
         logging.info("How-to-Install-or-Upgrade#quick-install")
-        logging.warn("%s %s Exiting Due to Error" % (progName, progVer))
+        logging.warn("%s %s Exiting Due to Error" % (app_constants.progName, app_constants.progVer))
         sys.exit(1)
     elif not os.path.exists(pluginPath):
         logging.error("File Not Found pluginName %s", pluginPath)
-        logging.info("Check Spelling of pluginName Value in %s", config.configFilePath)
+        logging.info("Check Spelling of pluginName Value in %s", "config.ini")
         logging.info("------- Valid Names -------")
         validPlugin = glob.glob(pluginDir + "/*py")
         validPlugin.sort()
@@ -130,7 +112,7 @@ if config.pluginEnable:     # Check and verify plugin and load variable overlay
         logging.info("or Rerun github curl install command.  See github wiki")
         logging.info("https://github.com/pageauc/speed-camera/wiki/")
         logging.info("How-to-Install-or-Upgrade#quick-install")
-        logging.warn("%s %s Exiting Due to Error", progName, progVer)
+        logging.warn("%s %s Exiting Due to Error", app_constants.progName, app_constants.progVer)
         sys.exit(1)
     else:
         pluginCurrent = os.path.join(pluginDir, "current.py")
@@ -141,7 +123,7 @@ if config.pluginEnable:     # Check and verify plugin and load variable overlay
             logging.error('Copy Failed from %s to %s - %s',
                           pluginPath, pluginCurrent, err)
             logging.info("Check permissions, disk space, Etc.")
-            logging.warn("%s %s Exiting Due to Error", progName, progVer)
+            logging.warn("%s %s Exiting Due to Error", app_constants.progName, app_constants.progVer)
             sys.exit(1)
         logging.info("Import Plugin %s", pluginPath)
         # add plugin directory to program PATH
@@ -154,50 +136,19 @@ if config.pluginEnable:     # Check and verify plugin and load variable overlay
             if os.path.exists(pluginCurrentpyc):
                 os.remove(pluginCurrentpyc)
         except OSError as err:
-            logging.warn("Failed To Remove File %s - %s",
+            logging.warning("Failed To Remove File %s - %s",
                          pluginCurrentpyc, err)
 
 # import the necessary packages
 # -----------------------------
-try:  #Add this check in case running on non RPI platform using web cam
-    from picamera.array import PiRGBArray
-    from picamera import PiCamera
-except ImportError:
-    WEBCAM = True
-if not WEBCAM:
-    # Check that pi camera module is installed and enabled
-    camResult = subprocess.check_output("vcgencmd get_camera", shell=True)
-    camResult = camResult.decode("utf-8")
-    camResult = camResult.replace("\n", "")
-    if (camResult.find("0")) >= 0:   # -1 is zero not found. Cam OK
-        logging.error("Pi Camera Module Not Found %s", camResult)
-        logging.error("if supported=0 Enable Camera per command sudo raspi-config")
-        logging.error("if detected=0 Check Pi Camera Module is Installed Correctly")
-        logging.error("%s %s Exiting Due to Error", progName, progVer)
-        sys.exit(1)
-    else:
-        logging.info("Pi Camera Module is Enabled and Connected %s", camResult)
-try:   # Check to see if opencv is installed
-    import cv2
-except ImportError:
-    logging.error("Could Not import cv2 library")
-    if sys.version_info > (2, 9):
-        logging.error("python3 failed to import cv2")
-        logging.error("Try installing opencv for python3")
-        logging.error("For RPI See https://github.com/pageauc/opencv3-setup")
-    else:
-        logging.error("python2 failed to import cv2")
-        logging.error("Try RPI Install per command")
-        logging.error("%s %s Exiting Due to Error", progName, progVer)
-    sys.exit(1)
 
-# fix possible invalid values
-if config.WINDOW_BIGGER < 1.0:
-    WINDOW_BIGGER = 1.0
-if config.image_bigger < 1.0:
-    config.image_bigger = 1.0
+# Not ideal situation where were having to load the libs here
+# because of the way the code is working
+cv2 = startup_helpers.import_cv2()
+startup_helpers.import_picam(config)
+
 # System Settings
-if WEBCAM:
+if config.WEBCAM:
     # Set width of trigger point image to save
     image_width = int(config.WEBCAM_WIDTH * config.image_bigger)
     # Set height of trigger point image to save
@@ -207,9 +158,10 @@ else:
     image_width = int(config.CAMERA_WIDTH * config.image_bigger)
     # Set height of trigger point image to save
     image_height = int(config.CAMERA_HEIGHT * config.image_bigger)
+
 # Calculate conversion from camera pixel width to actual speed.
 px_to_kph = float(config.cal_obj_mm/config.cal_obj_px * 0.0036)
-quote = '"'  # Used for creating quote delimited log file of speed data
+QUOTE = '"'  # Used for creating quote delimited log file of speed data
 
 if config.SPEED_MPH:
     speed_units = "mph"
@@ -218,138 +170,8 @@ else:
     speed_units = "kph"
     speed_conv = px_to_kph
 
-try:
-    config.x_buf_adjust   # check if variable exists in config.py
-except:
-    x_buf_adjust = 10   # Default=10 Divisor for screen width to Set space on left and right
-                        # of Crop image to ensure object contour is mostly inside tracking area.
-                        # smaller give more buffer space.
-    logging.warn("x_buf_adjust Not Found in config.py Setting value to %d", x_buf_adjust)
-
 # setup buffer area to ensure contour is mostly contained in crop area
 x_buf = int((config.x_right - config.x_left) / config.x_buf_adjust)
-
-try:
-    config.track_counter  # check if variable exists in config.py
-except:
-    config.track_counter = 3  # number of consecutive movements before reporting speed
-    fix_msg = ("""track_counter variable Not Found in config.py
-    To Fix Problem Run menubox.sh UPGRADE menu pick.
-    Latest config.py will be named config.py.new
-    Do the following commands in SSH or terminal
-
-        cd ~/speed-camera
-        cp config.py config.py.bak
-        cp config.py.new config.py
-
-    Then Transfer settings from bak File to config.py
-
-            Setting track_counter = %i""" % config.track_counter)
-    logging.warn(fix_msg)
-    try:
-        config.raw_input("Press Enter to Continue...")  # python 2
-    except:
-        input("Press Enter to Continue...")  # python 3
-
-#------------------------------------------------------------------------------
-class PiVideoStream:
-    def __init__(self, resolution=(config.CAMERA_WIDTH, config.CAMERA_HEIGHT),
-                 framerate=config.CAMERA_FRAMERATE, rotation=0,
-                 hflip=config.CAMERA_HFLIP, vflip=config.CAMERA_VFLIP):
-        """ initialize the camera and stream """
-        try:
-            self.camera = PiCamera()
-        except:
-            logging.error("PiCamera Already in Use by Another Process")
-            logging.error("%s %s Exiting Due to Error", progName, progVer)
-            sys.exit(1)
-        self.camera.resolution = resolution
-        self.camera.rotation = rotation
-        self.camera.framerate = framerate
-        self.camera.hflip = hflip
-        self.camera.vflip = vflip
-        self.rawCapture = PiRGBArray(self.camera, size=resolution)
-        self.stream = self.camera.capture_continuous(self.rawCapture,
-                                                     format="bgr",
-                                                     use_video_port=True)
-        """
-        initialize the frame and the variable used to indicate
-        if the thread should be stopped
-        """
-        self.frame = None
-        self.stopped = False
-
-    def start(self):
-        """ start the thread to read frames from the video stream """
-        t = Thread(target=self.update, args=())
-        t.daemon = True
-        t.start()
-        return self
-
-    def update(self):
-        """ keep looping infinitely until the thread is stopped """
-        for f in self.stream:
-            # grab the frame from the stream and clear the stream in
-            # preparation for the next frame
-            self.frame = f.array
-            self.rawCapture.truncate(0)
-
-            # if the thread indicator variable is set, stop the thread
-            # and resource camera resources
-            if self.stopped:
-                self.stream.close()
-                self.rawCapture.close()
-                self.camera.close()
-                return
-
-    def read(self):
-        """ return the frame most recently read """
-        return self.frame
-
-    def stop(self):
-        """ indicate that the thread should be stopped """
-        self.stopped = True
-
-#------------------------------------------------------------------------------
-class WebcamVideoStream:
-    def __init__(self, CAM_SRC=config.WEBCAM_SRC, CAM_WIDTH=config.WEBCAM_WIDTH,
-                 CAM_HEIGHT=config.WEBCAM_HEIGHT):
-        """
-        initialize the video camera stream and read the first frame
-        from the stream
-        """
-        self.stream = CAM_SRC
-        self.stream = cv2.VideoCapture(CAM_SRC)
-        self.stream.set(3, CAM_WIDTH)
-        self.stream.set(4, CAM_HEIGHT)
-        (self.grabbed, self.frame) = self.stream.read()
-        # initialize the variable used to indicate if the thread should
-        # be stopped
-        self.stopped = False
-
-    def start(self):
-        """ start the thread to read frames from the video stream """
-        t = Thread(target=self.update, args=())
-        t.daemon = True
-        t.start()
-        return self
-
-    def update(self):
-        """ keep looping infinitely until the thread is stopped """
-        while True:
-            # if the thread indicator variable is set, stop the thread
-            if self.stopped:
-                return
-            # otherwise, read the next frame from the stream
-            (self.grabbed, self.frame) = self.stream.read()
-
-    def read(self):
-        """ return the frame most recently read """
-        return self.frame
-
-    def stop(self):
-        """ indicate that the thread should be stopped """
-        self.stopped = True
 
 #------------------------------------------------------------------------------
 def get_fps(start_time, frame_count):
@@ -392,7 +214,7 @@ def show_settings():
     if config.verbose:
         print(horz_line)
         print("Note: To Send Full Output to File Use command")
-        print("python -u ./%s | tee -a log.txt" % progName)
+        print("python -u ./%s | tee -a log.txt" % app_constants.progName)
         print("Set log_data_to_file=True to Send speed_Data to CSV File %s.log"
               % baseFileName)
         print(horz_line)
@@ -856,7 +678,7 @@ def speed_get_contours(image, grayimage1):
     image_ok = False
     while not image_ok:
         image = vs.read() # Read image data from video steam thread instance
-        if WEBCAM:
+        if config.WEBCAM:
             if (config.WEBCAM_HFLIP and config.WEBCAM_VFLIP):
                 image = cv2.flip(image, -1)
             elif config.WEBCAM_HFLIP:
@@ -908,7 +730,7 @@ def speed_image_add_lines(image, color):
 
 def speed_notify():
     if config.pluginEnable:
-        logging.info("Plugin Enabled per pluginName=%s", pluginName)
+        logging.info("Plugin Enabled per pluginName=%s", config.pluginName)
     else:
         logging.info("Plugin Disabled per pluginEnable=%s", config.pluginEnable)
 
@@ -927,7 +749,7 @@ def speed_notify():
         print("Logging Messages Disabled per verbose=%s" % config.verbose)
 
     if config.calibrate:
-        logging.warn("IMPORTANT: Camera Is In Calibration Mode ....")
+        logging.warning("IMPORTANT: Camera Is In Calibration Mode ....")
 
     logging.info("Begin Motion Tracking .....")
 
@@ -973,8 +795,8 @@ def speed_camera():
         image_crop = image2[config.y_upper:config.y_lower, config.x_left:config.x_right]
     except:
         vs.stop()
-        logging.warn("Problem Connecting To Camera Stream.")
-        logging.warn("Restarting Camera.  One Moment Please ...")
+        logging.warning("Problem Connecting To Camera Stream.")
+        logging.warning("Restarting Camera.  One Moment Please ...")
         time.sleep(4)
         return
     grayimage1 = cv2.cvtColor(image_crop, cv2.COLOR_BGR2GRAY)
@@ -1155,12 +977,12 @@ def speed_camera():
                                     log_minute = ("%02d" % log_time.minute)
                                     m_area = track_w*track_h
                                     ave_speed = round(ave_speed, 2)
-                                    if WEBCAM:
+                                    if config.WEBCAM:
                                         camera = "WebCam"
                                     else:
                                         camera = "PiCam"
                                     if config.pluginEnable:
-                                        plugin_name = pluginName
+                                        plugin_name = config.pluginName
                                     else:
                                         plugin_name = "None"
                                     # create the speed data list ready for db insert
@@ -1193,33 +1015,33 @@ def speed_camera():
                                 if config.log_data_to_CSV:
                                     log_csv_time = ("%s%04d%02d%02d%s,"
                                                     "%s%02d%s,%s%02d%s"
-                                                    % (quote,
+                                                    % (QUOTE,
                                                        log_time.year,
                                                        log_time.month,
                                                        log_time.day,
-                                                       quote,
-                                                       quote,
+                                                       QUOTE,
+                                                       QUOTE,
                                                        log_time.hour,
-                                                       quote,
-                                                       quote,
+                                                       QUOTE,
+                                                       QUOTE,
                                                        log_time.minute,
-                                                       quote))
+                                                       QUOTE))
                                     log_csv_text = ("%s,%.2f,%s%s%s,%s%s%s,"
                                                     "%i,%i,%i,%i,%i,%s%s%s"
                                                     % (log_csv_time,
                                                        ave_speed,
-                                                       quote,
+                                                       QUOTE,
                                                        speed_units,
-                                                       quote,
-                                                       quote,
+                                                       QUOTE,
+                                                       QUOTE,
                                                        filename,
-                                                       quote,
+                                                       QUOTE,
                                                        track_x, track_y,
                                                        track_w, track_h,
                                                        track_w * track_h,
-                                                       quote,
+                                                       QUOTE,
                                                        travel_direction,
-                                                       quote))
+                                                       QUOTE))
                                     log_to_csv(log_csv_text)
                                 if config.spaceTimerHrs > 0:
                                     lastSpaceCheck = freeDiskSpaceCheck(lastSpaceCheck)
@@ -1326,8 +1148,8 @@ def speed_camera():
                     # otherwise a rectangle around most recent contour
                     if config.SHOW_CIRCLE:
                         cv2.circle(image2,
-                                   (track_x + config.x_left * WINDOW_BIGGER,
-                                    track_y + config.y_upper * WINDOW_BIGGER),
+                                   (track_x + config.x_left * config.WINDOW_BIGGER,
+                                    track_y + config.y_upper * config.WINDOW_BIGGER),
                                    config.CIRCLE_SIZE, cvGreen, config.LINE_THICKNESS)
                     else:
                         cv2.rectangle(image2,
@@ -1361,15 +1183,16 @@ if __name__ == '__main__':
         WEBCAM_TRIES = 0
         while True:
             # Start Web Cam stream (Note USB webcam must be plugged in)
-            if WEBCAM:
+            if config.WEBCAM:
                 WEBCAM_TRIES += 1
                 logging.info("Initializing USB Web Camera Try .. %i",
                              WEBCAM_TRIES)
                 # Start video stream on a processor Thread for faster speed
-                vs = WebcamVideoStream().start()
-                vs.CAM_SRC = config.WEBCAM_SRC
-                vs.CAM_WIDTH = config.WEBCAM_WIDTH
-                vs.CAM_HEIGHT = config.WEBCAM_HEIGHT
+                webcam_module = importlib.import_module("camera.webcam_video_stream")
+                vs = webcam_module.WebcamVideoStream(config).start()
+                # Not sure how this retry logic works and if it even does, i think this works based on
+                # speed_camera handling errors and returning. Regardless this should be encapsulated in
+                # the video stream class
                 if WEBCAM_TRIES > 3:
                     logging.error("USB Web Cam Not Connecting to WEBCAM_SRC %i",
                                   config.WEBCAM_SRC)
@@ -1377,22 +1200,20 @@ if __name__ == '__main__':
                     logging.error("on Specified SRC")
                     logging.error("and Not Used(busy) by Another Process.")
                     logging.error("%s %s Exiting Due to Error",
-                                  progName, progVer)
+                                  app_constants.progName, app_constants.progVer)
                     vs.stop()
                     sys.exit(1)
                 time.sleep(4.0)  # Allow WebCam to initialize
             else:
                 logging.info("Initializing Pi Camera ....")
+                picam_module = importlib.import_module("camera.pi_video_stream")
                 # Start a pi-camera video stream thread
-                vs = PiVideoStream().start()
-                vs.camera.rotation = config.CAMERA_ROTATION
-                vs.camera.hflip = config.CAMERA_HFLIP
-                vs.camera.vflip = config.CAMERA_VFLIP
+                vs = picam_module.PiVideoStream(config).start()
                 time.sleep(2.0)  # Allow PiCamera to initialize
-            speed_camera() # run main speed camera processing loop
+            speed_camera()  # run main speed camera processing loop
     except KeyboardInterrupt:
         vs.stop()
         print("")
         logging.info("User Pressed Keyboard ctrl-c")
-        logging.info("%s %s Exiting Program", progName, progVer)
+        logging.info("%s %s Exiting Program", app_constants.progName, app_constants.progVer)
         sys.exit()
