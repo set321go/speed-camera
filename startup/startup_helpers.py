@@ -1,14 +1,33 @@
 import logging
 import sys
+import os
 from config import app_constants
 import subprocess
 import importlib
 from importlib import util
+from search_config import search_dest_path
+
+
+def init_boot_logger():
+    # Boot logger for logging before we have loaded configuration data
+    logging.basicConfig(level=logging.DEBUG,
+                        format='%(message)s',
+                        datefmt='%Y-%m-%d %H:%M:%S')
 
 
 def init_logger(config):
+    if config.gui_window_on:
+        logging.info("Press lower case q on OpenCV GUI Window to Quit program or ctrl-c in this terminal session to Quit")
+    else:
+        logging.info("Press ctrl-c in this terminal session to Quit")
+    logging.info("Boot complete, starting application logger")
+    logging.info("----------------------------------------------------------------------")
+    # Remove the boot logger that was not configured
+    for handler in logging.root.handlers[:]:
+        logging.root.removeHandler(handler)
+
     # Now that variables are imported from config.py Setup Logging
-    log_level = logging.DEBUG if config.verbose else logging.CRITICAL
+    log_level = logging.DEBUG if config.verbose else logging.ERROR
     log_format = '%(asctime)s %(levelname)-8s %(funcName)-10s %(message)s'
     date_format = '%Y-%m-%d %H:%M:%S'
 
@@ -22,6 +41,30 @@ def init_logger(config):
         logging.basicConfig(level=log_level,
                             format=log_format,
                             datefmt=date_format)
+
+
+def create_dir(config):
+    cwd = os.getcwd()
+    html_path = "media/html"
+    if not os.path.isdir(config.image_path):
+        logging.info("Creating Image Storage Folder %s", config.image_path)
+        os.makedirs(config.image_path)
+    os.chdir(config.image_path)
+    os.chdir(cwd)
+    if config.imageRecentMax > 0:
+        if not os.path.isdir(config.imageRecentDir):
+            logging.info("Create Recent Folder %s", config.imageRecentDir)
+            try:
+                os.makedirs(config.imageRecentDir)
+            except OSError as err:
+                logging.error('Failed to Create Folder %s - %s', config.imageRecentDir, err)
+    if not os.path.isdir(search_dest_path):
+        logging.info("Creating Search Folder %s", search_dest_path)
+        os.makedirs(search_dest_path)
+    if not os.path.isdir(html_path):
+        logging.info("Creating html Folder %s", html_path)
+        os.makedirs(html_path)
+    os.chdir(cwd)
 
 
 def import_cv2():
@@ -41,7 +84,7 @@ def import_cv2():
         sys.exit(1)
 
 
-def import_picam(config):
+def look_for_picam(config):
     picam_spec = util.find_spec("picamera")
 
     if picam_spec is None:

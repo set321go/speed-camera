@@ -1,101 +1,228 @@
 import os
 import configparser
+import logging
+import sys
 from config import config_validation
+from config import app_constants
 
 
 class Config:
 
     def __init__(self, base_dir):
+        self.base_dir = base_dir
         config = configparser.ConfigParser()
         config_file_path = os.path.join(base_dir, "config.ini")
         if not os.path.exists(config_file_path):
-            print("WARN : Missing config.ini file - File Not Found %s", config_file_path)
-            print("INFO : Using preconfigured defaults")
+            logging.warning("Missing config.ini file - Looking for %s", config_file_path)
+            logging.info("Using preconfigured defaults")
             config_file = os.path.join(base_dir, 'config', 'default_config.ini')
             config.read(config_file)
         else:
             config.read(config_file_path)
 
-        self.calibrate = config.getboolean('DEFAULT', 'calibrate', fallback=True)
-        self.cal_obj_px = config.getint('DEFAULT', 'cal_obj_px', fallback=90)
-        self.cal_obj_mm = config.getfloat('DEFAULT', 'cal_obj_mm', fallback=4700.0)
+        # Load plugin config
         self.pluginEnable = config.getboolean('DEFAULT', 'pluginEnable', fallback=False)
         self.pluginName = config_validation.remove_python_extension(config.get('DEFAULT', 'pluginName', fallback='picam240'))
-        self.x_left = config.getint('DEFAULT', 'x_left', fallback=25)
-        self.x_right = config.getint('DEFAULT', 'x_right', fallback=295)
-        self.y_upper = config.getint('DEFAULT', 'y_upper', fallback=75)
-        self.y_lower = config.getint('DEFAULT', 'y_lower', fallback=185)
-        self.gui_window_on = config.getboolean('DEFAULT', 'gui_window_on', fallback=False)
-        self.show_thresh_on = config.getboolean('DEFAULT', 'show_thresh_on', fallback=False)
-        self.show_crop_on = config.getboolean('DEFAULT', 'show_crop_on', fallback=False)
-        self.verbose = config.getboolean('DEFAULT', 'verbose', fallback=True)
-        self.display_fps = config.getboolean('DEFAULT', 'display_fps', fallback=False)
-        self.data_dir = config.get('DEFAULT', 'data_dir', fallback='data')
-        self.log_data_to_CSV = config.getboolean('DEFAULT', 'log_data_to_CSV', fallback=True)
-        self.loggingToFile = config.getboolean('DEFAULT', 'loggingToFile', fallback=False)
-        self.logFilePath = config.get('DEFAULT', 'logFilePath', fallback='speed-cam.log')
-        self.SPEED_MPH = config.getboolean('DEFAULT', 'SPEED_MPH', fallback=False)
-        self.track_counter = config.getint('DEFAULT', 'track_counter', fallback=5)
-        self.MIN_AREA = config.getint('DEFAULT', 'MIN_AREA', fallback=100)
-        self.track_len_trig = config.getint('DEFAULT', 'track_len_trig', fallback=70)
-        self.show_out_range = config.getboolean('DEFAULT', 'show_out_range', fallback=True)
-        self.x_diff_max = config.getint('DEFAULT', 'x_diff_max', fallback=20)
-        self.x_diff_min = config.getint('DEFAULT', 'x_diff_min', fallback=1)
-        self.x_buf_adjust = config.getint('DEFAULT', 'x_buf_adjust', fallback=10)
-        self.track_timeout = config.getfloat('DEFAULT', 'track_timeout', fallback=0.0)
-        self.event_timeout = config.getfloat('DEFAULT', 'event_timeout', fallback=0.3)
-        self.max_speed_over = config.getint('DEFAULT', 'max_speed_over', fallback=0)
+        plugin_config = self.__load_plugin_overrides()
+        # load data with config & possible plugin
 
-        self.WEBCAM = config.getboolean('CAMERA', 'WEBCAM', fallback=False)
-        self.WEBCAM_SRC = config.getint('CAMERA', 'WEBCAM_SRC', fallback=0)
-        self.WEBCAM_WIDTH = config.getint('CAMERA', 'WEBCAM_WIDTH', fallback=320)
-        self.WEBCAM_HEIGHT = config.getint('CAMERA', 'WEBCAM_HEIGHT', fallback=240)
-        self.WEBCAM_HFLIP = config.getboolean('CAMERA', 'WEBCAM_HFLIP', fallback=True)
-        self.WEBCAM_VFLIP = config.getboolean('CAMERA', 'WEBCAM_VFLIP', fallback=False)
-        self.CAMERA_WIDTH = config.getint('CAMERA', 'CAMERA_WIDTH', fallback=320)
-        self.CAMERA_HEIGHT = config.getint('CAMERA', 'CAMERA_HEIGHT', fallback=240)
-        self.CAMERA_FRAMERATE = config.getint('CAMERA', 'CAMERA_FRAMERATE', fallback=20)
-        self.CAMERA_ROTATION = config.getint('CAMERA', 'CAMERA_ROTATION', fallback=0)
-        self.CAMERA_VFLIP = config.getboolean('CAMERA', 'CAMERA_VFLIP', fallback=True)
-        self.CAMERA_HFLIP = config.getboolean('CAMERA', 'CAMERA_HFLIP', fallback=True)
-        self.image_path = config.get('CAMERA', 'image_path', fallback='media/images')
-        self.image_prefix = config.get('CAMERA', 'image_prefix', fallback='speed-')
-        self.image_format = config.get('CAMERA', 'image_format', fallback='.jpg')
-        self.image_show_motion_area = config.getboolean('CAMERA', 'image_show_motion_area', fallback=True)
-        self.image_filename_speed = config.getboolean('CAMERA', 'image_filename_speed', fallback=False)
-        self.image_text_on = config.getboolean('CAMERA', 'image_text_on', fallback=True)
-        self.image_text_bottom = config.getboolean('CAMERA', 'image_text_bottom', fallback=True)
-        self.image_font_size = config.getint('CAMERA', 'image_font_size', fallback=12)
-        self.image_bigger = config_validation.enforce_lower_bound_float(config.getfloat('CAMERA', 'image_bigger', fallback=3.0), 1.0)
-        self.image_max_files = config.getint('CAMERA', 'image_max_files', fallback=0)
-        self.imageSubDirMaxFiles = config.getint('CAMERA', 'imageSubDirMaxFiles', fallback=1000)
-        self.imageSubDirMaxHours = config.getint('CAMERA', 'imageSubDirMaxHours', fallback=0)
-        self.imageRecentMax = config.getint('CAMERA', 'imageRecentMax', fallback=100)
-        self.imageRecentDir = config.get('CAMERA', 'imageRecentDir', fallback='media/recent')
-        self.spaceTimerHrs = config.getint('CAMERA', 'spaceTimerHrs', fallback=0)
-        self.spaceFreeMB = config.getint('CAMERA', 'spaceFreeMB', fallback=500)
-        self.spaceMediaDir = config.get('CAMERA', 'spaceMediaDir', fallback='media/images')
-        self.spaceFileExt = config.get('CAMERA', 'spaceFileExt', fallback='media/recent')
-        self.SHOW_CIRCLE = config.getboolean('CAMERA', 'SHOW_CIRCLE', fallback=False)
-        self.CIRCLE_SIZE = config.getint('CAMERA', 'CIRCLE_SIZE', fallback=5)
-        self.LINE_THICKNESS = config.getint('CAMERA', 'LINE_THICKNESS', fallback=1)
-        self.FONT_SCALE = config.getfloat('CAMERA', 'FONT_SCALE', fallback=0.5)
-        self.WINDOW_BIGGER = config_validation.enforce_lower_bound_float(config.getfloat('CAMERA', 'WINDOW_BIGGER', fallback=1.0), 1.0)
-        self.BLUR_SIZE = config.getint('CAMERA', 'BLUR_SIZE', fallback=10)
-        self.THRESHOLD_SENSITIVITY = config.getint('CAMERA', 'THRESHOLD_SENSITIVITY', fallback=20)
+        self.calibrate = self.__get_boolean(config, plugin_config, 'DEFAULT', 'calibrate', True)
+        self.cal_obj_px = self.__get_int(config, plugin_config, 'DEFAULT', 'cal_obj_px', 90)
+        self.cal_obj_mm = self.__get_float(config, plugin_config, 'DEFAULT', 'cal_obj_mm', 4700.0)
+        self.x_left = self.__get_int(config, plugin_config, 'DEFAULT', 'x_left', 25)
+        self.x_right = self.__get_int(config, plugin_config, 'DEFAULT', 'x_right', 295)
+        self.y_upper = self.__get_int(config, plugin_config, 'DEFAULT', 'y_upper', 75)
+        self.y_lower = self.__get_int(config, plugin_config, 'DEFAULT', 'y_lower', 185)
+        self.gui_window_on = self.__get_boolean(config, plugin_config, 'DEFAULT', 'gui_window_on', False)
+        self.show_thresh_on = self.__get_boolean(config, plugin_config, 'DEFAULT', 'show_thresh_on', False)
+        self.show_crop_on = self.__get_boolean(config, plugin_config, 'DEFAULT', 'show_crop_on', False)
+        self.verbose = self.__get_boolean(config, plugin_config, 'DEFAULT', 'verbose', True)
+        self.display_fps = self.__get_boolean(config, plugin_config, 'DEFAULT', 'display_fps', False)
+        self.data_dir = self.__get_str(config, plugin_config, 'DEFAULT', 'data_dir', 'data')
+        self.log_data_to_CSV = self.__get_boolean(config, plugin_config, 'DEFAULT', 'log_data_to_CSV', True)
+        self.loggingToFile = self.__get_boolean(config, plugin_config, 'DEFAULT', 'loggingToFile', False)
+        self.logFilePath = self.__get_str(config, plugin_config, 'DEFAULT', 'logFilePath', 'speed-cam.log')
+        self.SPEED_MPH = self.__get_boolean(config, plugin_config, 'DEFAULT', 'SPEED_MPH', False)
+        self.track_counter = self.__get_int(config, plugin_config, 'DEFAULT', 'track_counter', 5)
+        self.MIN_AREA = self.__get_int(config, plugin_config, 'DEFAULT', 'MIN_AREA', 100)
+        self.track_len_trig = self.__get_int(config, plugin_config, 'DEFAULT', 'track_len_trig', 70)
+        self.show_out_range = self.__get_boolean(config, plugin_config, 'DEFAULT', 'show_out_range', True)
+        self.x_diff_max = self.__get_int(config, plugin_config, 'DEFAULT', 'x_diff_max', 20)
+        self.x_diff_min = self.__get_int(config, plugin_config, 'DEFAULT', 'x_diff_min', 1)
+        self.x_buf_adjust = self.__get_int(config, plugin_config, 'DEFAULT', 'x_buf_adjust', 10)
+        self.track_timeout = self.__get_float(config, plugin_config, 'DEFAULT', 'track_timeout', 0.0)
+        self.event_timeout = self.__get_float(config, plugin_config, 'DEFAULT', 'event_timeout', 0.3)
+        self.max_speed_over = self.__get_int(config, plugin_config, 'DEFAULT', 'max_speed_over', 0)
 
-        self.web_server_port = config.getint('SERVER', 'web_server_port', fallback=8080)
-        self.web_server_root = config.get('SERVER', 'web_server_root', fallback='media')
-        self.web_page_title = config.get('SERVER', 'web_page_title', fallback='SPEED-CAMERA Media')
-        self.web_page_refresh_on = config.getboolean('SERVER', 'web_page_refresh_on', fallback=True)
-        self.web_page_refresh_sec = config.get('SERVER', 'web_page_refresh_sec', fallback='900')
-        self.web_page_blank = config.getboolean('SERVER', 'web_page_blank', fallback=False)
-        self.web_image_height = config.get('SERVER', 'web_image_height', fallback='768')
-        self.web_iframe_width_usage = config.get('SERVER', 'web_iframe_width_usage', fallback='70%%')
-        self.web_iframe_width = config.get('SERVER', 'web_iframe_width', fallback='100%%')
-        self.web_iframe_height = config.get('SERVER', 'web_iframe_height', fallback='100%%')
-        self.web_max_list_entries = config.getint('SERVER', 'web_max_list_entries', fallback=0)
-        self.web_list_height = config.get('SERVER', 'web_image_height', fallback='768')
-        self.web_list_by_datetime = config.getboolean('SERVER', 'web_list_by_datetime', fallback=True)
-        self.web_list_sort_descending = config.getboolean('SERVER', 'web_list_sort_descending', fallback=True)
+        self.WEBCAM = self.__get_boolean(config, plugin_config, 'CAMERA', 'WEBCAM', False)
+        self.WEBCAM_SRC = self.__get_int(config, plugin_config, 'CAMERA', 'WEBCAM_SRC', 0)
+        self.WEBCAM_WIDTH = self.__get_int(config, plugin_config, 'CAMERA', 'WEBCAM_WIDTH', 320)
+        self.WEBCAM_HEIGHT = self.__get_int(config, plugin_config, 'CAMERA', 'WEBCAM_HEIGHT', 240)
+        self.WEBCAM_HFLIP = self.__get_boolean(config, plugin_config, 'CAMERA', 'WEBCAM_HFLIP', True)
+        self.WEBCAM_VFLIP = self.__get_boolean(config, plugin_config, 'CAMERA', 'WEBCAM_VFLIP', False)
+        self.CAMERA_WIDTH = self.__get_int(config, plugin_config, 'CAMERA', 'CAMERA_WIDTH', 320)
+        self.CAMERA_HEIGHT = self.__get_int(config, plugin_config, 'CAMERA', 'CAMERA_HEIGHT', 240)
+        self.CAMERA_FRAMERATE = self.__get_int(config, plugin_config, 'CAMERA', 'CAMERA_FRAMERATE', 20)
+        self.CAMERA_ROTATION = self.__get_int(config, plugin_config, 'CAMERA', 'CAMERA_ROTATION', 0)
+        self.CAMERA_VFLIP = self.__get_boolean(config, plugin_config, 'CAMERA', 'CAMERA_VFLIP', True)
+        self.CAMERA_HFLIP = self.__get_boolean(config, plugin_config, 'CAMERA', 'CAMERA_HFLIP', True)
+        self.image_path = self.__get_str(config, plugin_config, 'CAMERA', 'image_path', 'media/images')
+        self.image_prefix = self.__get_str(config, plugin_config, 'CAMERA', 'image_prefix', 'speed-')
+        self.image_format = self.__get_str(config, plugin_config, 'CAMERA', 'image_format', '.jpg')
+        self.image_show_motion_area = self.__get_boolean(config, plugin_config, 'CAMERA', 'image_show_motion_area', True)
+        self.image_filename_speed = self.__get_boolean(config, plugin_config, 'CAMERA', 'image_filename_speed', False)
+        self.image_text_on = self.__get_boolean(config, plugin_config, 'CAMERA', 'image_text_on', True)
+        self.image_text_bottom = self.__get_boolean(config, plugin_config, 'CAMERA', 'image_text_bottom', True)
+        self.image_font_size = self.__get_int(config, plugin_config, 'CAMERA', 'image_font_size', 12)
+        self.image_bigger = config_validation.enforce_lower_bound_float(
+            self.__get_float(config, plugin_config, 'CAMERA', 'image_bigger', 3.0), 1.0)
+        self.image_max_files = self.__get_int(config, plugin_config, 'CAMERA', 'image_max_files', 0)
+        self.imageSubDirMaxFiles = self.__get_int(config, plugin_config, 'CAMERA', 'imageSubDirMaxFiles', 1000)
+        self.imageSubDirMaxHours = self.__get_int(config, plugin_config, 'CAMERA', 'imageSubDirMaxHours', 0)
+        self.imageRecentMax = self.__get_int(config, plugin_config, 'CAMERA', 'imageRecentMax', 100)
+        self.imageRecentDir = self.__get_str(config, plugin_config, 'CAMERA', 'imageRecentDir', 'media/recent')
+        self.spaceTimerHrs = self.__get_int(config, plugin_config, 'CAMERA', 'spaceTimerHrs', 0)
+        self.spaceFreeMB = self.__get_int(config, plugin_config, 'CAMERA', 'spaceFreeMB', 500)
+        self.spaceMediaDir = self.__get_str(config, plugin_config, 'CAMERA', 'spaceMediaDir', 'media/images')
+        self.spaceFileExt = self.__get_str(config, plugin_config, 'CAMERA', 'spaceFileExt', 'media/recent')
+        self.SHOW_CIRCLE = self.__get_boolean(config, plugin_config, 'CAMERA', 'SHOW_CIRCLE', False)
+        self.CIRCLE_SIZE = self.__get_int(config, plugin_config, 'CAMERA', 'CIRCLE_SIZE', 5)
+        self.LINE_THICKNESS = self.__get_int(config, plugin_config, 'CAMERA', 'LINE_THICKNESS', 1)
+        self.FONT_SCALE = self.__get_float(config, plugin_config, 'CAMERA', 'FONT_SCALE', 0.5)
+        self.WINDOW_BIGGER = config_validation.enforce_lower_bound_float(
+            self.__get_float(config, plugin_config, 'CAMERA', 'WINDOW_BIGGER', 1.0), 1.0)
+        self.BLUR_SIZE = self.__get_int(config, plugin_config, 'CAMERA', 'BLUR_SIZE', 10)
+        self.THRESHOLD_SENSITIVITY = self.__get_int(config, plugin_config, 'CAMERA', 'THRESHOLD_SENSITIVITY', 20)
 
+        self.web_server_port = self.__get_int(config, plugin_config, 'SERVER', 'web_server_port', 8080)
+        self.web_server_root = self.__get_str(config, plugin_config, 'SERVER', 'web_server_root', 'media')
+        self.web_page_title = self.__get_str(config, plugin_config, 'SERVER', 'web_page_title', 'SPEED-CAMERA Media')
+        self.web_page_refresh_on = self.__get_boolean(config, plugin_config, 'SERVER', 'web_page_refresh_on', True)
+        self.web_page_refresh_sec = self.__get_str(config, plugin_config, 'SERVER', 'web_page_refresh_sec', '900')
+        self.web_page_blank = self.__get_boolean(config, plugin_config, 'SERVER', 'web_page_blank', False)
+        self.web_image_height = self.__get_str(config, plugin_config, 'SERVER', 'web_image_height', '768')
+        self.web_iframe_width_usage = self.__get_str(config, plugin_config, 'SERVER', 'web_iframe_width_usage', '70%%')
+        self.web_iframe_width = self.__get_str(config, plugin_config, 'SERVER', 'web_iframe_width', '100%%')
+        self.web_iframe_height = self.__get_str(config, plugin_config, 'SERVER', 'web_iframe_height', '100%%')
+        self.web_max_list_entries = self.__get_int(config, plugin_config, 'SERVER', 'web_max_list_entries', 0)
+        self.web_list_height = self.__get_str(config, plugin_config, 'SERVER', 'web_image_height', '768')
+        self.web_list_by_datetime = self.__get_boolean(config, plugin_config, 'SERVER', 'web_list_by_datetime', True)
+        self.web_list_sort_descending = self.__get_boolean(config, plugin_config, 'SERVER', 'web_list_sort_descending', True)
+
+    def __get_str(self, config, plugin, section, attr_name, default_value):
+        value = config.get(section, attr_name, fallback=default_value)
+        if plugin is not None:
+            return plugin.get(section, attr_name, fallback=value)
+        else:
+            return value
+
+    def __get_boolean(self, config, plugin, section, attr_name, default_value):
+        value = config.getboolean(section, attr_name, fallback=default_value)
+        if plugin is not None:
+            return plugin.getboolean(section, attr_name, fallback=value)
+        else:
+            return value
+
+    def __get_int(self, config, plugin, section, attr_name, default_value):
+        value = config.getint(section, attr_name, fallback=default_value)
+        if plugin is not None:
+            return plugin.getint(section, attr_name, fallback=value)
+        else:
+            return value
+
+    def __get_float(self, config, plugin, section, attr_name, default_value):
+        value = config.getfloat(section, attr_name, fallback=default_value)
+        if plugin is not None:
+            return plugin.getfloat(section, attr_name, fallback=value)
+        else:
+            return value
+
+    def __load_plugin_overrides(self):
+        if self.pluginEnable:
+            plugin_path = os.path.join(self.base_dir, "plugins", self.pluginName + '.ini')
+            logging.info("pluginEnabled - loading pluginName %s", plugin_path)
+            if not os.path.exists(plugin_path):
+                logging.error("File Not Found pluginName %s", plugin_path)
+                logging.info("Check Spelling of pluginName Value in %s", "config.ini")
+                sys.exit(1)
+            plugin_config = configparser.ConfigParser()
+            plugin_config.read(plugin_path)
+            return plugin_config
+        else:
+            logging.info("plugins not enabled")
+            return None
+
+    def get_speed_units(self):
+        return "mph" if self.SPEED_MPH else "kph"
+
+    def get_speed_conf(self):
+        # Calculate conversion from camera pixel width to actual speed.
+        px_to_kph = float(self.cal_obj_mm/self.cal_obj_px * 0.0036)
+        return 0.621371 * px_to_kph if self.SPEED_MPH else px_to_kph
+
+    def get_image_width(self):
+        return int(self.WEBCAM_WIDTH * self.image_bigger) if self.WEBCAM else int(self.CAMERA_WIDTH * self.image_bigger)
+
+    def get_image_height(self):
+        return int(self.WEBCAM_HEIGHT * self.image_bigger) if self.WEBCAM else int(self.CAMERA_HEIGHT * self.image_bigger)
+
+    def display_config_verbose(self):
+        """Initialize and Display program variable settings from config.py"""
+
+        if self.verbose:
+            logging.info(app_constants.horz_line)
+            logging.info("Note: To Send Full Output to File Use command")
+            logging.info("python -u ./%s | tee -a log.txt", app_constants.progName)
+            logging.info("Set log_data_to_file=True to Send speed_Data to CSV File %s.log", app_constants.progName)
+            logging.info(app_constants.horz_line)
+            logging.info("")
+
+            logging.info("Debug Messages .. verbose=%s  display_fps=%s calibrate=%s", self.verbose, self.display_fps, self.calibrate)
+            logging.info("                  show_out_range=%s", self.show_out_range)
+            logging.info("Plugins ......... pluginEnable=%s  pluginName=%s", self.pluginEnable, self.pluginName)
+            logging.info("Calibration ..... cal_obj_px=%i px  cal_obj_mm=%i mm (longer is faster) speed_conv=%.5f",
+                         self.cal_obj_px, self.cal_obj_mm, self.get_speed_conf())
+            if self.pluginEnable:
+                logging.info("                  (Change Settings in %s)", os.path.join(self.base_dir, "plugins", self.pluginName + '.ini'))
+            else:
+                logging.info("                  (Change Settings in %s)", 'config.ini')
+            logging.info("Logging ......... Log_data_to_CSV=%s  log_filename=%s.csv (CSV format)",
+                         self.log_data_to_CSV, os.path.join(self.data_dir, 'speed_cam.csv'))
+            logging.info("                  loggingToFile=%s  logFilePath=%s", self.loggingToFile, self.logFilePath)
+            logging.info("                  SQLITE3 DB_PATH=%s  DB_TABLE=%s", os.path.join(self.data_dir, 'speed_cam.db'), 'speed')
+            logging.info("Speed Trigger ... Log only if max_speed_over > %i %s", self.max_speed_over, self.get_speed_units())
+            logging.info("                  and track_counter >= %i consecutive motion events", self.track_counter)
+            logging.info("Exclude Events .. If  x_diff_min < %i or x_diff_max > %i px", self.x_diff_min, self.x_diff_max)
+            logging.info("                  If  y_upper < %i or y_lower > %i px", self.y_upper, self.y_lower)
+            logging.info("                  or  x_left < %i or x_right > %i px", self.x_left, self.x_right)
+            logging.info("                  If  max_speed_over < %i %s", self.max_speed_over, self.get_speed_units())
+            logging.info("                  If  event_timeout > %.2f seconds Start New Track", self.event_timeout)
+            logging.info("                  track_timeout=%.2f sec wait after Track Ends (avoid retrack of same object)", self.track_timeout)
+            logging.info("Speed Photo ..... Size=%ix%i px  image_bigger=%.1f  rotation=%i  VFlip=%s  HFlip=%s ",
+                         self.get_image_width(), self.get_image_height(), self.image_bigger, self.CAMERA_ROTATION,
+                         self.CAMERA_VFLIP, self.CAMERA_HFLIP)
+            logging.info("                  image_path=%s  image_Prefix=%s", self.image_path, self.image_prefix)
+            logging.info("                  image_font_size=%i px high  image_text_bottom=%s", self.image_font_size, self.image_text_bottom)
+            logging.info("Motion Settings . Size=%ix%i px  speed_conv=%f  speed_units=%s",
+                         self.CAMERA_WIDTH, self.CAMERA_HEIGHT, self.get_speed_conf(), self.get_speed_units())
+            logging.info("OpenCV Settings . MIN_AREA=%i sq-px  BLUR_SIZE=%i THRESHOLD_SENSITIVITY=%i  CIRCLE_SIZE=%i px",
+                         self.MIN_AREA, self.BLUR_SIZE, self.THRESHOLD_SENSITIVITY, self.CIRCLE_SIZE)
+            logging.info("                  WINDOW_BIGGER=%i gui_window_on=%s (Display OpenCV Status Windows on GUI Desktop)",
+                         self.WINDOW_BIGGER, self.gui_window_on)
+            logging.info("                  CAMERA_FRAMERATE=%i fps video stream speed", self.CAMERA_FRAMERATE)
+            logging.info("Sub-Directories . imageSubDirMaxHours=%i (0=off) imageSubDirMaxFiles=%i (0=off)",
+                         self.imageSubDirMaxHours, self.imageSubDirMaxFiles)
+            logging.info("                  imageRecentDir=%s imageRecentMax=%i (0=off)", self.imageRecentDir, self.imageRecentMax)
+            if self.spaceTimerHrs > 0:   # Check if disk mgmt is enabled
+                logging.info("Disk Space  ..... Enabled - Manage Target Free Disk Space. Delete Oldest %s Files if Needed", self.spaceFileExt)
+                logging.info("                  Check Every spaceTimerHrs=%i hr(s) (0=off)  Target spaceFreeMB=%i MB  min is 100 MB)",
+                             self.spaceTimerHrs, self.spaceFreeMB)
+                logging.info("                  If Needed Delete Oldest spaceFileExt=%s  spaceMediaDir=%s",
+                             self.spaceFileExt, self.spaceMediaDir)
+            else:
+                logging.info("Disk Space  ..... Disabled - spaceTimerHrs=%i Manage Target Free Disk Space. Delete Oldest %s Files",
+                             self.spaceTimerHrs, self.spaceFileExt)
+                logging.info("                  spaceTimerHrs=%i (0=Off) Target spaceFreeMB=%i (min=100 MB)",
+                             self.spaceTimerHrs, self.spaceFreeMB)
+            logging.info("")
+            logging.info(app_constants.horz_line)
