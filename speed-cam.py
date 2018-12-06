@@ -46,22 +46,15 @@ import sys
 import glob
 import shutil
 import logging
-import sqlite3
 import importlib
 from config.config import Config
 from config import app_constants
 from startup import startup_helpers
+from storage import SqlLiteStorageService, CSVStorageService
 
 # Temporarily put these variables here so config.py does not need updating
 # These are required for sqlite3 speed_cam.db database.
 # Will work on reports and possibly a web query page for speed data.
-DB_DIR = "data"
-DB_NAME = "speed_cam.db"
-DB_TABLE = "speed"
-
-if not os.path.exists(DB_DIR):
-    os.makedirs(DB_DIR)
-DB_PATH = os.path.join(DB_DIR, DB_NAME)
 
 mypath = os.path.abspath(__file__)  # Find the full path of this python script
 # get the path location only (excluding script name)
@@ -231,11 +224,11 @@ def show_settings():
         else:
             print("                  (Change Settings in %s)" % 'config.ini')
         print("Logging ......... Log_data_to_CSV=%s  log_filename=%s.csv (CSV format)"
-              % (config.log_data_to_CSV, baseFileName))
+              % (config.log_data_to_CSV, os.path.join(config.data_dir, 'speed_cam.csv')))
         print("                  loggingToFile=%s  logFilePath=%s"
               % (config.loggingToFile, config.logFilePath))
         print("                  SQLITE3 DB_PATH=%s  DB_TABLE=%s"
-              % (DB_PATH, DB_TABLE))
+              % (os.path.join(config.data_dir, 'speed_cam.db'), 'speed'))
         print("Speed Trigger ... Log only if max_speed_over > %i %s"
               % (config.max_speed_over, speed_units))
         print("                  and track_counter >= %i consecutive motion events"
@@ -564,115 +557,10 @@ def get_image_name(path, prefix):
     return filename
 
 #------------------------------------------------------------------------------
-def log_to_csv(data_to_append):
-    """ Store date to a comma separated value file """
-    log_file_path = baseDir + baseFileName + ".csv"
-    if not os.path.exists(log_file_path):
-        open(log_file_path, 'w').close()
-        f = open(log_file_path, 'ab')
-        # header_text = ('"YYYYMMDD","HH","MM","Speed","Unit",
-        #                  "    Speed Photo Path            ",
-        #                  "X","Y","W","H","Area","Direction"' + "\n")
-        # f.write( header_text )
-        f.close()
-        logging.info("Create New Data Log File %s", log_file_path)
-    filecontents = data_to_append + "\n"
-    f = open(log_file_path, 'a+')
-    f.write(filecontents)
-    f.close()
-    logging.info("   CSV - Updated Data  %s", log_file_path)
-    return
 
 #------------------------------------------------------------------------------
-def isSQLite3(filename):
-    """
-    Determine if file is in sqlite3 format
-    """
-    if os.path.isfile(filename):
-        if os.path.getsize(filename) < 100: # SQLite database file header is 100 bytes
-            size = os.path.getsize(filename)
-            logging.error("%s %d is Less than 100 bytes", filename, size)
-            return False
-        with open(filename, 'rb') as fd:
-            header = fd.read(100)
-            if header.startswith('SQLite format 3'):
-                logging.info("Success: File is sqlite3 Format %s", filename)
-                return True
-            else:
-                logging.error("Failed: File NOT sqlite3 Header Format %s", filename)
-                return False
-    else:
-        logging.warning("File Not Found %s", filename)
-        logging.info("Create sqlite3 database File %s", filename)
-        try:
-            conn = sqlite3.connect(filename)
-        except sqlite3.Error as e:
-            logging.error("Failed: Create Database %s.", filename)
-            logging.error("Error Msg: %s", e)
-            return False
-        conn.commit()
-        conn.close()
-        logging.info("Success: Created sqlite3 Database %s", filename)
-        return True
 
 #------------------------------------------------------------------------------
-def db_check(db_file):
-    """
-    Check if db_file is a sqlite3 file and connect if possible
-    """
-    if isSQLite3(db_file):
-        try:
-            conn = sqlite3.connect(db_file)
-        except sqlite3.Error as e:
-            logging.error("Failed: sqlite3 Connect to DB %s", db_file)
-            logging.error("Error Msg: %s", e)
-            return None
-    else:
-        logging.error("Failed: sqlite3 Not DB Format %s", db_file)
-        return None
-    conn.commit()
-    logging.info("Success: sqlite3 Connected to DB %s", db_file)
-    return conn
-
-def db_open(db_file):
-    """
-    Insert speed data into database table
-    """
-    if os.path.isfile(db_file):
-        db_exists = True
-    else:
-        db_exists = False
-
-    try:
-        db_conn = sqlite3.connect(db_file)
-        cursor = db_conn.cursor()
-    except sqlite3.Error as e:
-        logging.error("Failed: sqlite3 Connect to DB %s", db_file)
-        logging.error("Error Msg: %s", e)
-        return None
-
-    sql_cmd = '''create table if not exists {} (idx text primary key,
-                 log_date text, log_hour text, log_minute text,
-                 camera text,
-                 ave_speed real, speed_units text, image_path text,
-                 image_w integer, image_h integer, image_bigger integer,
-                 direction text, plugin_name text,
-                 cx integer, cy integer,
-                 mw integer, mh integer, m_area integer,
-                 x_left integer, x_right integer,
-                 y_upper integer, y_lower integer,
-                 max_speed_over integer,
-                 min_area integer, track_counter integer,
-                 cal_obj_px integer, cal_obj_mm integer)'''.format(DB_TABLE)
-    try:
-        db_conn.execute(sql_cmd)
-    except sqlite3.Error as e:
-        logging.error("Failed: To Create Table %s on sqlite3 DB %s", DB_TABLE, db_file)
-        logging.error("Error Msg: %s", e)
-        return None
-    else:
-        db_conn.commit()
-    return db_conn
 
 def speed_get_contours(image, grayimage1):
     image_ok = False
@@ -775,17 +663,9 @@ def speed_camera():
     # Initialize prev_image used for taking speed image photo
     lastSpaceCheck = datetime.datetime.now()
     speed_path = config.image_path
-    db_conn = db_check(DB_PATH)
-    # check and open sqlite3 db
-    if db_conn is not None:
-        db_conn = db_open(DB_PATH)
-        if db_conn is None:
-            logging.error("Failed: Connect to sqlite3 DB %s", DB_PATH)
-            db_is_open = False
-        else:
-            logging.info("sqlite3 DB is Open %s", DB_PATH)
-            db_cur = db_conn.cursor()  # Set cursor position
-            db_is_open = True
+    csv = CSVStorageService(config)
+    db = SqlLiteStorageService(config)
+    db.start()
     speed_notify()
     # initialize a cropped grayimage1 image
     image2 = vs.read()  # Get image from PiVideoSteam thread instance
@@ -960,7 +840,7 @@ def speed_camera():
                                 cv2.imwrite(filename, big_image)
                                 # if required check free disk space
                                 # and delete older files (jpg)
-                                if db_is_open:
+                                if db.is_available():
                                     log_idx = ("%04d%02d%02d-%02d%02d%02d%d" %
                                                (log_time.year,
                                                 log_time.month,
@@ -999,20 +879,10 @@ def speed_camera():
                                                   config.max_speed_over,
                                                   config.MIN_AREA, config.track_counter,
                                                   config.cal_obj_px, config.cal_obj_mm)
-
+                                    db.save_speed_data(speed_data)
                                     # Insert speed_data into sqlite3 database table
-                                    try:
-                                        sql_cmd = '''insert into {} values {}'''.format(DB_TABLE, speed_data)
-                                        db_conn.execute(sql_cmd)
-                                        db_conn.commit()
-                                    except sqlite3.Error as e:
-                                        logging.error("sqlite3 DB %s", DB_PATH)
-                                        logging.error("Failed: To INSERT Speed Data into TABLE %s", DB_TABLE)
-                                        logging.error("Err Msg: %s", e)
-                                    else:
-                                        logging.info(" SQL - Update sqlite3 Data in %s", DB_PATH)
                                 # Format and Save Data to CSV Log File
-                                if config.log_data_to_CSV:
+                                if csv.is_active:
                                     log_csv_time = ("%s%04d%02d%02d%s,"
                                                     "%s%02d%s,%s%02d%s"
                                                     % (QUOTE,
@@ -1042,7 +912,7 @@ def speed_camera():
                                                        QUOTE,
                                                        travel_direction,
                                                        QUOTE))
-                                    log_to_csv(log_csv_text)
+                                    csv.write_line(log_csv_text)
                                 if config.spaceTimerHrs > 0:
                                     lastSpaceCheck = freeDiskSpaceCheck(lastSpaceCheck)
                                 # Manage a maximum number of files

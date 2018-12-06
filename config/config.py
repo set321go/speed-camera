@@ -30,6 +30,7 @@ class Config:
         self.show_crop_on = config.getboolean('DEFAULT', 'show_crop_on', fallback=False)
         self.verbose = config.getboolean('DEFAULT', 'verbose', fallback=True)
         self.display_fps = config.getboolean('DEFAULT', 'display_fps', fallback=False)
+        self.data_dir = config.get('DEFAULT', 'data_dir', fallback='data')
         self.log_data_to_CSV = config.getboolean('DEFAULT', 'log_data_to_CSV', fallback=True)
         self.loggingToFile = config.getboolean('DEFAULT', 'loggingToFile', fallback=False)
         self.logFilePath = config.get('DEFAULT', 'logFilePath', fallback='speed-cam.log')
