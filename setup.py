@@ -102,7 +102,8 @@ setup(
     entry_points={
         'console_scripts': [
             'speed-cam=speedcam.speed_cam:main',
-            'speed-cam-search=search.search_speed:main'
+            'speed-cam-search=search.search_speed:main',
+            'speed-cam-server=server.webserver:main'
         ],
     },
     install_requires=REQUIRED,
