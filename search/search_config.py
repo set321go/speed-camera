@@ -8,7 +8,7 @@
 # Display and Log settings
 # ------------------------
 search_verbose = True      # Display basic status information on console
-search_log_to_file = False # True = Send logging to file   (not implemented yet)
+search_log_to_file = False  # True = Send logging to file   (not implemented yet)
 search_logfile_path = 'speed-search.log'  # Location of log file when search_log_to_file=True
 
 search_gui_on = False      # True = Turn On All desktop GUI openCV windows. False=Don't Show (req'd for SSH) .
@@ -18,7 +18,7 @@ search_source_images_path = "media/images"  # Source images folder
 search_copy_on = True                # Copy matching image files to search_path subfolder (based on search filename minus ext)
 search_dest_path = 'media/search'    # Destination for Result images if search_copy_on = True
 search_using_csv = True              # False= Use glob  True= Use csv file for source file names
-search_csv_path = 'speed-cam.csv'    #
+search_csv_path = 'data/speed_cam.csv'    #
 search_data_on_image = True          # default=True show match_value on result images
 
 search_match_method = 3       # Default=3   Valid MatchTemplate COMPARE_METHOD Int Values

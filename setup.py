@@ -100,7 +100,10 @@ setup(
     # py_modules=['mypackage'],
 
     entry_points={
-        'console_scripts': ['speed-cam=speedcam.speed_cam:main'],
+        'console_scripts': [
+            'speed-cam=speedcam.speed_cam:main',
+            'speed-cam-search=search.search_speed:main'
+        ],
     },
     install_requires=REQUIRED,
     extras_require=EXTRAS,
