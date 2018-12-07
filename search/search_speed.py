@@ -38,7 +38,7 @@ import glob
 import shutil
 import sys
 from search.search_config import *  # Read Configuration variables from search_config.py file
-from speedcam.config.config import Config
+from config import Config
 from search import __version__
 
 

@@ -33,7 +33,7 @@ import urllib
 from http.server import SimpleHTTPRequestHandler
 from io import StringIO
 from server import __version__
-from speedcam.config.config import Config
+from config import Config
 
 
 def DirectoryHandlerCompanion(config):

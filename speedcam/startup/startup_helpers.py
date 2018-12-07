@@ -1,7 +1,7 @@
 import logging
 import sys
 import os
-from speedcam.config import app_constants
+from config import app_constants
 import subprocess
 import importlib
 from importlib import util

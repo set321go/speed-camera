@@ -2,8 +2,8 @@ import os
 import configparser
 import logging
 import sys
-from speedcam.config import config_validation
-from speedcam.config import app_constants
+from config import config_validation
+from config import app_constants
 
 
 class Config:

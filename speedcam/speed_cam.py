@@ -44,8 +44,8 @@ import logging
 import importlib
 from speedcam.camera.utils import *
 from speedcam.camera import calibration
-from speedcam.config import app_constants
-from speedcam.config.config import Config
+from config import app_constants
+from config import Config
 from speedcam.startup import startup_helpers
 from speedcam.storage import SqlLiteStorageService, CSVStorageService, utils
 
