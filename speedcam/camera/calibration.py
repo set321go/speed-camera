@@ -1,7 +1,7 @@
 import cv2
 import logging
 import os
-import camera.utils
+from speedcam.camera import utils
 
 
 def take_calibration_image(config, speed, filename, cal_image):
@@ -13,13 +13,13 @@ def take_calibration_image(config, speed, filename, cal_image):
     # colors to give more contrast.  You need to change values below
     # per values cvRed, cvBlue, cvWhite, cvBlack, cvGreen
 
-    hash_color = camera.utils.cvRed
-    motion_win_color = camera.utils.cvBlue
+    hash_color = utils.cvRed
+    motion_win_color = utils.cvBlue
 
     for i in range(10, config.get_image_width() - 9, 10):
         cv2.line(cal_image, (i, config.y_upper - 5), (i, config.y_upper + 30), hash_color, 1)
     # This is motion window
-    cal_image = camera.utils.speed_image_add_lines(config, cal_image, motion_win_color)
+    cal_image = utils.speed_image_add_lines(config, cal_image, motion_win_color)
     if config.SPEED_MPH:
         speed_units = 'mph'
     else:

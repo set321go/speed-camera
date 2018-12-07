@@ -1,7 +1,7 @@
 import logging
 import sys
 from threading import Thread
-from config import app_constants
+from speedcam.config import app_constants
 from picamera import PiCamera
 
 

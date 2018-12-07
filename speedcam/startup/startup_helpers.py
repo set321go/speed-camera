@@ -1,11 +1,11 @@
 import logging
 import sys
 import os
-from config import app_constants
+from speedcam.config import app_constants
 import subprocess
 import importlib
 from importlib import util
-from search_config import search_dest_path
+from search.search_config import search_dest_path
 
 
 def init_boot_logger():

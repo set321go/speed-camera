@@ -536,7 +536,7 @@ def main():
                 WEBCAM_TRIES += 1
                 logging.info("Initializing USB Web Camera (Tries %i)..", WEBCAM_TRIES)
                 # Start video stream on a processor Thread for faster speed
-                webcam_module = importlib.import_module("camera.webcam_video_stream")
+                webcam_module = importlib.import_module("speedcam.camera.webcam_video_stream")
                 vs = webcam_module.WebcamVideoStream(config).start()
                 # Not sure how this retry logic works and if it even does, i think this works based on
                 # speed_camera handling errors and returning. Regardless this should be encapsulated in
@@ -554,7 +554,7 @@ def main():
                 time.sleep(4.0)  # Allow WebCam to initialize
             else:
                 logging.info("Initializing Pi Camera ....")
-                picam_module = importlib.import_module("camera.pi_video_stream")
+                picam_module = importlib.import_module("speedcam.camera.pi_video_stream")
                 # Start a pi-camera video stream thread
                 vs = picam_module.PiVideoStream(config).start()
                 time.sleep(2.0)  # Allow PiCamera to initialize
