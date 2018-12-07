@@ -39,47 +39,15 @@ chmod +x speed-install.sh
 """
 import time
 import datetime
-import os
 import sys
 import logging
 import importlib
-from camera.utils import *
-from camera import calibration
-from config import app_constants
-from config.config import Config
-from startup import startup_helpers
-from storage import SqlLiteStorageService, CSVStorageService, utils
-
-startup_helpers.init_boot_logger()
-logging.info("%s %s   written by Claude Pageau", app_constants.progName, app_constants.progVer)
-logging.info(app_constants.horz_line)
-logging.info("Loading ...")
-
-# Will work on reports and possibly a web query page for speed data.
-
-mypath = os.path.abspath(__file__)  # Find the full path of this python script
-# get the path location only (excluding script name)
-baseDir = mypath[0:mypath.rfind("/")+1]
-baseFileName = mypath[mypath.rfind("/")+1:mypath.rfind(".")]
-
-config = Config(baseDir)
-config.display_config_verbose()
-startup_helpers.create_dir(config)
-db = SqlLiteStorageService(config)
-db.start()
-
-startup_helpers.init_logger(config)
-
-
-# import the necessary packages
-# -----------------------------
-
-# Not ideal situation where were having to load the libs here
-# because of the way the code is working
-cv2 = startup_helpers.import_cv2()
-startup_helpers.look_for_picam(config)
-
-QUOTE = '"'  # Used for creating quote delimited log file of speed data
+from speedcam.camera.utils import *
+from speedcam.camera import calibration
+from speedcam.config import app_constants
+from speedcam.config.config import Config
+from speedcam.startup import startup_helpers
+from speedcam.storage import SqlLiteStorageService, CSVStorageService, utils
 
 
 # ------------------------------------------------------------------------------
@@ -107,7 +75,7 @@ def get_image_name(path, prefix):
 
 
 # ------------------------------------------------------------------------------
-def speed_get_contours(grayimage1):
+def speed_get_contours(config, vs, grayimage1):
     image_ok = False
     while not image_ok:
         image = vs.read()  # Read image data from video steam thread instance
@@ -148,11 +116,11 @@ def speed_get_contours(grayimage1):
                                                                cv2.CHAIN_APPROX_SIMPLE)
     # Update grayimage1 to grayimage2 ready for next image2
     grayimage1 = grayimage2
-    return grayimage1, contours
+    return grayimage1, contours, thresholdimage
 
 
 # ------------------------------------------------------------------------------
-def speed_camera():
+def speed_camera(config, db, vs):
     """ Main speed camera processing function """
     # initialize variables
     frame_count = 0
@@ -192,7 +160,7 @@ def speed_camera():
     still_scanning = True
     while still_scanning:  # process camera thread images and calculate speed
         image2 = vs.read()  # Read image data from video steam thread instance
-        grayimage1, contours = speed_get_contours(grayimage1)
+        grayimage1, contours, thresholdimage = speed_get_contours(config, vs, grayimage1)
         # if contours found, find the one with biggest area
         if contours:
             total_contours = len(contours)
@@ -386,33 +354,33 @@ def speed_camera():
                                 if csv.is_active:
                                     log_csv_time = ("%s%04d%02d%02d%s,"
                                                     "%s%02d%s,%s%02d%s"
-                                                    % (QUOTE,
+                                                    % (app_constants.QUOTE,
                                                        log_time.year,
                                                        log_time.month,
                                                        log_time.day,
-                                                       QUOTE,
-                                                       QUOTE,
+                                                       app_constants.QUOTE,
+                                                       app_constants.QUOTE,
                                                        log_time.hour,
-                                                       QUOTE,
-                                                       QUOTE,
+                                                       app_constants.QUOTE,
+                                                       app_constants.QUOTE,
                                                        log_time.minute,
-                                                       QUOTE))
+                                                       app_constants.QUOTE))
                                     log_csv_text = ("%s,%.2f,%s%s%s,%s%s%s,"
                                                     "%i,%i,%i,%i,%i,%s%s%s"
                                                     % (log_csv_time,
                                                        ave_speed,
-                                                       QUOTE,
+                                                       app_constants.QUOTE,
                                                        config.get_speed_units(),
-                                                       QUOTE,
-                                                       QUOTE,
+                                                       app_constants.QUOTE,
+                                                       app_constants.QUOTE,
                                                        filename,
-                                                       QUOTE,
+                                                       app_constants.QUOTE,
                                                        track_x, track_y,
                                                        track_w, track_h,
                                                        track_w * track_h,
-                                                       QUOTE,
+                                                       app_constants.QUOTE,
                                                        travel_direction,
-                                                       QUOTE))
+                                                       app_constants.QUOTE))
                                     csv.write_line(log_csv_text)
                                 if config.spaceTimerHrs > 0:
                                     last_space_check = utils.freeDiskSpaceCheck(last_space_check, config)
@@ -528,12 +496,10 @@ def speed_camera():
                                        int(config.y_upper + track_y + track_h)),
                                       cvGreen, config.LINE_THICKNESS)
         if config.gui_window_on:
-            # cv2.imshow('Difference Image',difference image)
             image2 = speed_image_add_lines(config, image2, cvRed)
             image_view = cv2.resize(image2, (config.get_image_width(), config.get_image_height()))
             cv2.imshow('Movement (q Quits)', image_view)
             if config.show_thresh_on:
-                # FIXME This variable is not available in this scope
                 cv2.imshow('Threshold', config.thresholdimage)
             if config.show_crop_on:
                 cv2.imshow('Crop Area', image_crop)
@@ -547,8 +513,21 @@ def speed_camera():
             fps_time, frame_count = get_fps(fps_time, frame_count)
 
 
-# ------------------------------------------------------------------------------
-if __name__ == '__main__':
+def main():
+    startup_helpers.init_boot_logger()
+    logging.info("%s %s   written by Claude Pageau", app_constants.progName, app_constants.progVer)
+    logging.info(app_constants.horz_line)
+    logging.info("Loading ...")
+
+    config = Config()
+    config.display_config_verbose()
+    startup_helpers.create_dir(config)
+    db = SqlLiteStorageService(config)
+    db.start()
+
+    startup_helpers.init_logger(config)
+    startup_helpers.look_for_picam(config)
+
     try:
         WEBCAM_TRIES = 0
         while True:
@@ -579,10 +558,14 @@ if __name__ == '__main__':
                 # Start a pi-camera video stream thread
                 vs = picam_module.PiVideoStream(config).start()
                 time.sleep(2.0)  # Allow PiCamera to initialize
-            speed_camera()  # run main speed camera processing loop
+            speed_camera(config, db, vs)  # run main speed camera processing loop
     except KeyboardInterrupt:
         vs.stop()
         print("")
         logging.info("User Pressed Keyboard ctrl-c")
         logging.info("%s %s Exiting Program", app_constants.progName, app_constants.progVer)
         sys.exit()
+
+
+if __name__ == '__main__':
+    main()

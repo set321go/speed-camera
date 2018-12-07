@@ -87,19 +87,20 @@ def import_cv2():
 def look_for_picam(config):
     picam_spec = util.find_spec("picamera")
 
-    if picam_spec is None:
+    if picam_spec is None and not config.WEBCAM:
+        logging.warning('Changing to webcam mode as no picamera module detected')
         config.WEBCAM = True
 
     if not config.WEBCAM:
         # Check that pi camera module is installed and enabled
-        camResult = subprocess.check_output("vcgencmd get_camera", shell=True)
-        camResult = camResult.decode("utf-8")
-        camResult = camResult.replace("\n", "")
-        if (camResult.find("0")) >= 0:   # -1 is zero not found. Cam OK
-            logging.error("Pi Camera Module Not Found %s", camResult)
+        cam_result = subprocess.check_output("vcgencmd get_camera", shell=True)
+        cam_result = cam_result.decode("utf-8")
+        cam_result = cam_result.replace("\n", "")
+        if (cam_result.find("0")) >= 0:   # -1 is zero not found. Cam OK
+            logging.error("Pi Camera Module Not Found %s", cam_result)
             logging.error("if supported=0 Enable Camera per command sudo raspi-config")
             logging.error("if detected=0 Check Pi Camera Module is Installed Correctly")
             logging.error("%s %s Exiting Due to Error", app_constants.progName, app_constants.progVer)
             sys.exit(1)
         else:
-            logging.info("Pi Camera Module is Enabled and Connected %s", camResult)
+            logging.info("Pi Camera Module is Enabled and Connected %s", cam_result)

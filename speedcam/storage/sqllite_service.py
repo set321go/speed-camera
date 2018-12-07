@@ -80,7 +80,7 @@ class SqlLiteStorageService:
                 return False
             with open(self.DB_PATH, 'rb') as fd:
                 header = fd.read(100)
-                if header.startswith('SQLite format 3'):
+                if header.startswith(b'SQLite format 3'):
                     logging.info("Success: File is sqlite3 Format %s", self.DB_PATH)
                     return True
                 else:
