@@ -109,6 +109,19 @@ class Config:
         self.web_list_by_datetime = self.__get_boolean(config, plugin_config, 'SERVER', 'web_list_by_datetime', True)
         self.web_list_sort_descending = self.__get_boolean(config, plugin_config, 'SERVER', 'web_list_sort_descending', True)
 
+        self.search_verbose = self.__get_boolean(config, plugin_config, 'SEARCH', 'search_verbose', True)
+        self.search_log_to_file = self.__get_boolean(config, plugin_config, 'SEARCH', 'search_log_to_file', False)
+        self.search_logfile_path = self.__get_str(config, plugin_config, 'SEARCH', 'search_logfile_path', 'speed-search.log')
+        self.search_gui_on = self.__get_boolean(config, plugin_config, 'SEARCH', 'search_gui_on', False)
+        self.search_match_value = self.__get_float(config, plugin_config, 'SEARCH', 'search_match_value', 0.97)
+        self.search_source_images_path = self.__get_str(config, plugin_config, 'SEARCH', 'search_source_images_path', "media/images")
+        self.search_copy_on = self.__get_boolean(config, plugin_config, 'SEARCH', 'search_copy_on', True)
+        self.search_dest_path = self.__get_str(config, plugin_config, 'SEARCH', 'search_dest_path', 'media/search')
+        self.search_using_csv = self.__get_boolean(config, plugin_config, 'SEARCH', 'search_using_csv', True)
+        self.search_csv_path = self.__get_str(config, plugin_config, 'SEARCH', 'search_csv_path', 'data/speed_cam.csv')
+        self.search_data_on_image = self.__get_boolean(config, plugin_config, 'SEARCH', 'search_data_on_image', True)
+        self.search_match_method = self.__get_int(config, plugin_config, 'SEARCH', 'search_match_method', 3)
+
     def __get_str(self, config, plugin, section, attr_name, default_value):
         value = config.get(section, attr_name, fallback=default_value)
         if plugin is not None:

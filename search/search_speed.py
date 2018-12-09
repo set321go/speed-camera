@@ -37,7 +37,6 @@ import csv
 import glob
 import shutil
 import sys
-from search.search_config import *  # Read Configuration variables from search_config.py file
 from config import Config
 from search import __version__
 
@@ -49,11 +48,11 @@ def print_at(x, y, text):
 
 
 # -----------------------------------------------------------------------------------------------
-def check_image_match(full_image, small_image):
+def check_image_match(config, full_image, small_image):
     # Look for small_image in full_image and return best and worst results
     # Try other MATCH_METHOD settings per config.py comments
     # For More Info See http://docs.opencv.org/3.1.0/d4/dc6/tutorial_py_template_matching.html
-    result = cv2.matchTemplate( full_image, small_image, search_match_method)
+    result = cv2.matchTemplate(full_image, small_image, config.search_match_method)
     # Process result to return probabilities and Location of best and worst image match
     minVal, maxVal, minLoc, maxLoc = cv2.minMaxLoc(result)  # find search rect match in new image
     return maxVal
@@ -91,10 +90,10 @@ def search_for_match(config, config_file_path, search_image, search_rect):
     crop_y_U = (config.y_upper + 10) * config.image_bigger
     crop_y_D = (config.y_lower - 10) * config.image_bigger
     # Construct a results folder name based on original search filename minus extension
-    results_dir_path = os.path.join(search_dest_path,
+    results_dir_path = os.path.join(config.search_dest_path,
                        os.path.splitext(os.path.basename(search_image))[0])
-    print_at(2,1,"Target  : %s with search_match_value>%.4f" % ( search_image, search_match_value ))
-    if search_copy_on:  # Create a search results dest folder if required otherwise results is view only
+    print_at(2,1,"Target  : %s with search_match_value>%.4f" % ( search_image, config.search_match_value))
+    if config.search_copy_on:  # Create a search results dest folder if required otherwise results is view only
         if not os.path.exists(results_dir_path):
             try:
                 os.makedirs(results_dir_path)
@@ -105,36 +104,36 @@ def search_for_match(config, config_file_path, search_image, search_rect):
                 print('Created Search Results Dir %s' % (results_dir_path))
 
     # Construct path of search file in original images folder
-    search_image_path = os.path.join(search_source_images_path, os.path.basename(search_image))
+    search_image_path = os.path.join(config.search_source_images_path, os.path.basename(search_image))
     work_start = time.time()      # Start a timer for processing duration
     try:
-        if search_using_csv:
-            f = open(search_csv_path, 'rt')  # Open csv file for reading
+        if config.search_using_csv:
+            f = open(config.search_csv_path, 'rt')  # Open csv file for reading
             reader = csv.reader(f)    # Read csv file into reader list
             image_data = list(reader)
         else:
-            image_data = glob.glob(os.path.join(search_source_images_path, '/*jpg'))
+            image_data = glob.glob(os.path.join(config.search_source_images_path, '/*jpg'))
         search_images_total = len(image_data)
 
         for row in image_data:  # row is a list of one row of data
             work_count += 1  # increment counter for number of images processed
-            if search_using_csv:
+            if config.search_using_csv:
                 current_image_path = row[5]  # Get target image filename
             else:
                 current_image_path = image_data[cnt]
             cnt += 1  # Increment Row Counter
             if os.path.isfile(current_image_path):   # check if file exists
                 target_image = cv2.imread(current_image_path)  # read color image in BGR format
-                target_rect = target_image[crop_y_U:crop_y_D,crop_x_L:crop_x_R]
-                search_result_value = check_image_match(target_rect, search_rect)  # get search result
+                target_rect = target_image[crop_y_U:crop_y_D, crop_x_L:crop_x_R]
+                search_result_value = check_image_match(config, target_rect, search_rect)  # get search result
 
                 # Check if result is OK and not itself
-                if search_result_value >= search_match_value and not (current_image_path == search_image_path):
+                if search_result_value >= config.search_match_value and not (current_image_path == search_image_path):
                     result_count += 1   # increment valid search result counter
                     result_list.append([search_result_value, current_image_path])  # Update search result_list
                     print_at(4, 1, "Matched : %i Last: %i/%i  value: %.4f/%.4f  MATCH=%s       " %
-                             (result_count, cnt, search_images_total, search_result_value, search_match_value, current_image_path))
-                    if search_copy_on:
+                             (result_count, cnt, search_images_total, search_result_value, config.search_match_value, current_image_path))
+                    if config.search_copy_on:
                         # Put a copy of search match file into results subfolder (named with search file name without ext)
                         try:
                             shutil.copy(current_image_path, results_dir_path)  # put a copy of file in results folder
@@ -146,13 +145,13 @@ def search_for_match(config, config_file_path, search_image, search_rect):
                         cv2.waitKey(3000)  # pause for 3 seconds if match found
                 else:
                     print_at(3, 1, "Progress: %i/%i  value: %.4f/%.4f  SKIP=%s    " %
-                             (cnt, search_images_total, search_result_value, search_match_value, current_image_path))
+                             (cnt, search_images_total, search_result_value, config.search_match_value, current_image_path))
                     if config.gui_window_on:
                         cv2.imshow("Searching", search_rect)
                         cv2.imshow("Target", target_rect)
                         cv2.waitKey(20)  # Not a match so display for a short time
         try:
-            if search_copy_on:
+            if config.search_copy_on:
                 # At end of search Copy search file to search results folder
                 shutil.copy(search_image, results_dir_path)
                 if os.path.exists(search_image):
@@ -160,28 +159,28 @@ def search_for_match(config, config_file_path, search_image, search_rect):
         except OSError as err:
             print('ERROR: Copy Failed from %s to %s - %s' % (search_image, results_dir_path, err))
     finally:
-        if search_using_csv:
+        if config.search_using_csv:
             f.close()   # close csv file
         work_end = time.time()  # stop work timer
         print("------------------------------------------------")
         print("Search Results Matching %s" % search_image)
-        print("with search_match_value >= %.4f" % search_match_value)
+        print("with search_match_value >= %.4f" % config.search_match_value)
         print("------------------------------------------------")
         if result_list:  # Check if results_list has search file entries
             result_list.sort(reverse=True)
             for filename in result_list:
                 print(filename)
             print("------------------------------------------------")
-            if search_copy_on:
+            if config.search_copy_on:
                 print("Search Match Files Copied to Folder: %s " % results_dir_path)
             else:
-                print("search_copy_on=%s  No Search Match Files Copied to Folder: %s" % (search_copy_on, results_dir_path))
+                print("search_copy_on=%s  No Search Match Files Copied to Folder: %s" % (config.search_copy_on, results_dir_path))
         else:
             print("------------- Instructions ---------------------")
             print("")
             print("No Search Matches Found.")
-            print("You May Need to Reduce %s variable search_match_value = %.4f" % (config_file_path, search_match_value))
-            print("From %.4f to a lower value." % search_match_value)
+            print("You May Need to Reduce %s variable search_match_value = %.4f" % (config_file_path, config.search_match_value))
+            print("From %.4f to a lower value." % config.search_match_value)
             print("Then Try Again")
             print("")
         print("Processed %i Images in %i seconds Found %i Matches" %
@@ -226,11 +225,11 @@ def main():
 
     blank = "                                                              "
 
-    if not os.path.isdir(search_dest_path):
-        print("Creating Search Folder %s" % search_dest_path)
-        os.makedirs(search_dest_path)
+    if not os.path.isdir(config.search_dest_path):
+        print("Creating Search Folder %s" % config.search_dest_path)
+        os.makedirs(config.search_dest_path)
 
-    search_list = glob.glob(search_dest_path + '/*jpg')
+    search_list = glob.glob(config.search_dest_path + '/*jpg')
     target_total = len(search_list)
     try:
         if search_list:  # Are there any search files found in search_path
@@ -242,7 +241,7 @@ def main():
                 print_at(1, 1, "%s %s written by Claude Pageau       " % (progName, ver))
                 print("------------------------------------------------")
                 print("Found %i Target Search Image Files in %s" %
-                      (target_total, search_dest_path))
+                      (target_total, config.search_dest_path))
                 print("------------------------------------------------")
                 for files in search_list:
                     current = files
@@ -263,12 +262,12 @@ def main():
         else:
             print("------------- Instructions ---------------------")
             print("")
-            print("No Search Files Found in Folder %s" % search_dest_path)
+            print("No Search Files Found in Folder %s" % config.search_dest_path)
             print("To enable a search")
-            print("1 Copy one or more Speed Image File(s) to Folder: %s" % search_dest_path)
+            print("1 Copy one or more Speed Image File(s) to Folder: %s" % config.search_dest_path)
             print("2 Restart this script.")
             print("")
-            print("Note: search_config.py variable search_copy_on = %s" % search_copy_on)
+            print("Note: search_config.py variable search_copy_on = %s" % config.search_copy_on)
             print("if True Then a copy of all search match files will be copied")
             print("To a search subfolder named after the search image name minus extension")
             print("Otherwise search results will be displayed with no copying (useful for testing)")
