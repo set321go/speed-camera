@@ -5,7 +5,6 @@ from config import app_constants
 import subprocess
 import importlib
 from importlib import util
-from search.search_config import search_dest_path
 
 
 def init_boot_logger():
@@ -58,9 +57,9 @@ def create_dir(config):
                 os.makedirs(config.imageRecentDir)
             except OSError as err:
                 logging.error('Failed to Create Folder %s - %s', config.imageRecentDir, err)
-    if not os.path.isdir(search_dest_path):
-        logging.info("Creating Search Folder %s", search_dest_path)
-        os.makedirs(search_dest_path)
+    if not os.path.isdir(config.search_dest_path):
+        logging.info("Creating Search Folder %s", config.search_dest_path)
+        os.makedirs(config.search_dest_path)
     if not os.path.isdir(html_path):
         logging.info("Creating html Folder %s", html_path)
         os.makedirs(html_path)

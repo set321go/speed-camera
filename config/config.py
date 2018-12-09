@@ -9,6 +9,7 @@ from config import app_constants
 class Config:
 
     def __init__(self):
+        self.computed_config_cache = dict()
         self.base_dir = os.getcwd()
         config = configparser.ConfigParser()
         config_file_path = os.path.join(self.base_dir, "config.ini")
@@ -165,24 +166,36 @@ class Config:
             logging.info("plugins not enabled")
             return None
 
-    # Ideally these values should be pre computed not calculated repeatedly at runtime
     def get_speed_units(self):
-        return "mph" if self.SPEED_MPH else "kph"
+        if 'speed_units' not in self.computed_config_cache:
+            self.computed_config_cache['speed_units'] = "mph" if self.SPEED_MPH else "kph"
+            return self.computed_config_cache['speed_units']
+        return self.computed_config_cache['speed_units']
 
     def get_speed_conf(self):
-        # Calculate conversion from camera pixel width to actual speed.
-        px_to_kph = float(self.cal_obj_mm/self.cal_obj_px * 0.0036)
-        return 0.621371 * px_to_kph if self.SPEED_MPH else px_to_kph
+        if 'speed_conv' not in self.computed_config_cache:
+            # Calculate conversion from camera pixel width to actual speed.
+            px_to_kph = float(self.cal_obj_mm/self.cal_obj_px * 0.0036)
+            self.computed_config_cache['speed_conv'] = 0.621371 * px_to_kph if self.SPEED_MPH else px_to_kph
+        return self.computed_config_cache['speed_conv']
 
     def get_image_width(self):
-        return int(self.WEBCAM_WIDTH * self.image_bigger) if self.WEBCAM else int(self.CAMERA_WIDTH * self.image_bigger)
+        if 'image_width' not in self.computed_config_cache:
+            self.computed_config_cache['image_width'] = int(self.WEBCAM_WIDTH * self.image_bigger) \
+                if self.WEBCAM else int(self.CAMERA_WIDTH * self.image_bigger)
+        return self.computed_config_cache['image_width']
 
     def get_image_height(self):
-        return int(self.WEBCAM_HEIGHT * self.image_bigger) if self.WEBCAM else int(self.CAMERA_HEIGHT * self.image_bigger)
+        if 'image_height' not in self.computed_config_cache:
+            self.computed_config_cache['image_height'] = int(self.WEBCAM_HEIGHT * self.image_bigger) \
+                if self.WEBCAM else int(self.CAMERA_HEIGHT * self.image_bigger)
+        return self.computed_config_cache['image_height']
 
     def get_x_buf(self):
-        # setup buffer area to ensure contour is mostly contained in crop area
-        return int((self.x_right - self.x_left) / self.x_buf_adjust)
+        if 'image_x_buff' not in self.computed_config_cache:
+            # setup buffer area to ensure contour is mostly contained in crop area
+            self.computed_config_cache['image_x_buff'] = int((self.x_right - self.x_left) / self.x_buf_adjust)
+        return self.computed_config_cache['image_x_buff']
 
     def display_config_verbose(self):
         """Initialize and Display program variable settings from config.py"""
