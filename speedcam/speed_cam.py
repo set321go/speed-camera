@@ -79,20 +79,10 @@ def speed_get_contours(config, vs, grayimage1):
     image_ok = False
     while not image_ok:
         image = vs.read()  # Read image data from video steam thread instance
-        if config.WEBCAM:
-            if config.WEBCAM_HFLIP and config.WEBCAM_VFLIP:
-                image = cv2.flip(image, -1)
-            elif config.WEBCAM_HFLIP:
-                image = cv2.flip(image, 1)
-            elif config.WEBCAM_VFLIP:
-                image = cv2.flip(image, 0)
         # crop image to motion tracking area only
-        try:
-            image_crop = image[config.y_upper:config.y_lower, config.x_left:config.x_right]
+        image_crop = crop_image(config, image)
+        if image_crop is not None:
             image_ok = True
-        except ValueError:
-            logging.error("image Stream Image is Not Complete. Cannot Crop. Retry.")
-            image_ok = False
     # Convert to gray scale, which is easier
     grayimage2 = cv2.cvtColor(image_crop, cv2.COLOR_BGR2GRAY)
     # Get differences between the two greyed images
@@ -119,6 +109,46 @@ def speed_get_contours(config, vs, grayimage1):
     return grayimage1, contours, thresholdimage
 
 
+def crop_image(config, image):
+    try:
+        # crop image to motion tracking area only
+        image_crop = image[config.y_upper:config.y_lower, config.x_left:config.x_right]
+    except ValueError:
+        logging.warning("image Stream Image is Not Complete. Cannot Crop.")
+        image_crop = None
+    return image_crop
+
+
+def update_gui(config, image, image_crop, track):
+    # track = (x, y, w, h)
+    if config.gui_window_on:
+        # show small circle at contour xy if required
+        # otherwise a rectangle around most recent contour
+        if track is not None:
+            if config.SHOW_CIRCLE:
+                cv2.circle(image,
+                           (track[0] + config.x_left * config.WINDOW_BIGGER,
+                            track[1] + config.y_upper * config.WINDOW_BIGGER),
+                           config.CIRCLE_SIZE, cvGreen, config.LINE_THICKNESS)
+            else:
+                cv2.rectangle(image,
+                              (int(config.x_left + track[0]),
+                               int(config.y_upper + track[1])),
+                              (int(config.x_left + track[0] + track[2]),
+                               int(config.y_upper + track[1] + track[3])),
+                              cvGreen, config.LINE_THICKNESS)
+        image = speed_image_add_lines(config, image, cvRed)
+        image_view = cv2.resize(image, (config.get_image_width(), config.get_image_height()))
+        cv2.imshow('Movement (q Quits)', image_view)
+        if config.show_thresh_on:
+            cv2.imshow('Threshold', config.thresholdimage)
+        if config.show_crop_on:
+            cv2.imshow('Crop Area', image_crop)
+        # Close Window if q pressed
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            sys.exit()
+
+
 # ------------------------------------------------------------------------------
 def speed_camera(config, db, vs):
     """ Main speed camera processing function """
@@ -128,7 +158,6 @@ def speed_camera(config, db, vs):
     first_event = True   # Start a New Motion Track
     start_pos_x = None
     end_pos_x = None
-    font = cv2.FONT_HERSHEY_SIMPLEX
     # Calculate position of text on the images
     if config.image_text_bottom:
         text_y = (config.get_image_height() - 50)  # show text at bottom of image
@@ -137,16 +166,13 @@ def speed_camera(config, db, vs):
     # Initialize prev_image used for taking speed image photo
     storage_utils = utils.StorageUtils(config)
     csv = CSVStorageService(config)
-    if config.calibrate:
-        logging.warning("IMPORTANT: Camera Is In Calibration Mode ....")
 
     logging.info("Begin Motion Tracking .....")
     # initialize a cropped grayimage1 image
     image2 = vs.read()  # Get image from PiVideoSteam thread instance
-    try:
-        # crop image to motion tracking area only
-        image_crop = image2[config.y_upper:config.y_lower, config.x_left:config.x_right]
-    except:
+    image_crop = crop_image(config, image2)
+    if image_crop is None:
+        # Should maybe use an exception here
         vs.stop()
         logging.warning("Problem Connecting To Camera Stream.")
         logging.warning("Restarting Camera.  One Moment Please ...")
@@ -161,9 +187,9 @@ def speed_camera(config, db, vs):
         image2 = vs.read()  # Read image data from video steam thread instance
         grayimage1, contours, thresholdimage = speed_get_contours(config, vs, grayimage1)
         # if contours found, find the one with biggest area
+        motion_found = False
         if contours:
             total_contours = len(contours)
-            motion_found = False
             biggest_area = config.MIN_AREA
             for c in contours:
                 # get area of contour
@@ -216,9 +242,9 @@ def speed_camera(config, db, vs):
                         track_count += 1  # increment
                         cur_track_dist = abs(end_pos_x - prev_pos_x)
                         cur_ave_speed = float((abs(cur_track_dist /
-                                               float(abs(cur_track_time -
-                                                         prev_start_time)))) *
-                                                         config.get_speed_conf())
+                                                   float(abs(cur_track_time -
+                                                             prev_start_time)))) *
+                                              config.get_speed_conf())
                         speed_list.append(cur_ave_speed)
                         prev_start_time = cur_track_time
                         if track_count >= config.track_counter:
@@ -293,7 +319,7 @@ def speed_camera(config, db, vs):
                                     cv2.putText(big_image,
                                                 image_text,
                                                 (text_x, text_y),
-                                                font,
+                                                cv2.FONT_HERSHEY_SIMPLEX,
                                                 config.FONT_SCALE,
                                                 cvWhite,
                                                 2)
@@ -377,6 +403,7 @@ def speed_camera(config, db, vs):
                                     csv.write_line(log_csv_text)
                                 # Check if we need to clean the disk
                                 storage_utils.free_space_check()
+                                # Check if we need to rotate the image dir
                                 storage_utils.rotate_image_dir()
                                 # Manage a maximum number of files
                                 # and delete oldest if required.
@@ -471,35 +498,8 @@ def speed_camera(config, db, vs):
                                 if track_count == 0:
                                     first_event = True
                         event_timer = time.time()  # Reset Event Timer
-                if config.gui_window_on:
-                    # show small circle at contour xy if required
-                    # otherwise a rectangle around most recent contour
-                    if config.SHOW_CIRCLE:
-                        cv2.circle(image2,
-                                   (track_x + config.x_left * config.WINDOW_BIGGER,
-                                    track_y + config.y_upper * config.WINDOW_BIGGER),
-                                   config.CIRCLE_SIZE, cvGreen, config.LINE_THICKNESS)
-                    else:
-                        cv2.rectangle(image2,
-                                      (int(config.x_left + track_x),
-                                       int(config.y_upper + track_y)),
-                                      (int(config.x_left + track_x + track_w),
-                                       int(config.y_upper + track_y + track_h)),
-                                      cvGreen, config.LINE_THICKNESS)
-        if config.gui_window_on:
-            image2 = speed_image_add_lines(config, image2, cvRed)
-            image_view = cv2.resize(image2, (config.get_image_width(), config.get_image_height()))
-            cv2.imshow('Movement (q Quits)', image_view)
-            if config.show_thresh_on:
-                cv2.imshow('Threshold', config.thresholdimage)
-            if config.show_crop_on:
-                cv2.imshow('Crop Area', image_crop)
-            # Close Window if q pressed
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                cv2.destroyAllWindows()
-                logging.info("End Motion Tracking ......")
-                vs.stop()
-                still_scanning = False
+        track = (track_x, track_y, track_w, track_h) if contours and motion_found else None
+        update_gui(config, image2, image_crop, track)
         if config.display_fps:   # Optionally show motion image processing loop fps
             fps_time, frame_count = get_fps(fps_time, frame_count)
 
@@ -519,43 +519,42 @@ def main():
     startup_helpers.init_logger(config)
     startup_helpers.look_for_picam(config)
 
+    vs = None
     try:
-        WEBCAM_TRIES = 0
         while True:
             # Start Web Cam stream (Note USB webcam must be plugged in)
             if config.WEBCAM:
-                WEBCAM_TRIES += 1
-                logging.info("Initializing USB Web Camera (Tries %i)..", WEBCAM_TRIES)
+                logging.info("Initializing USB Web Camera ..")
                 # Start video stream on a processor Thread for faster speed
                 webcam_module = importlib.import_module("speedcam.camera.webcam_video_stream")
                 vs = webcam_module.WebcamVideoStream(config).start()
-                # Not sure how this retry logic works and if it even does, i think this works based on
-                # speed_camera handling errors and returning. Regardless this should be encapsulated in
-                # the video stream class
-                if WEBCAM_TRIES > 3:
-                    logging.error("USB Web Cam Not Connecting to WEBCAM_SRC %i",
-                                  config.WEBCAM_SRC)
-                    logging.error("Check Camera is Plugged In and Working")
-                    logging.error("on Specified SRC")
+
+                if vs.failed:
+                    logging.error("USB Web Cam Not Connecting to WEBCAM_SRC %i", config.WEBCAM_SRC)
+                    logging.error("Check Camera is Plugged In and Working on Specified SRC")
                     logging.error("and Not Used(busy) by Another Process.")
-                    logging.error("%s %s Exiting Due to Error",
-                                  app_constants.progName, app_constants.progVer)
-                    vs.stop()
+                    logging.error("%s %s Exiting Due to Error", app_constants.progName, app_constants.progVer)
                     sys.exit(1)
-                time.sleep(4.0)  # Allow WebCam to initialize
             else:
                 logging.info("Initializing Pi Camera ....")
                 picam_module = importlib.import_module("speedcam.camera.pi_video_stream")
                 # Start a pi-camera video stream thread
                 vs = picam_module.PiVideoStream(config).start()
                 time.sleep(2.0)  # Allow PiCamera to initialize
+            if config.calibrate:
+                logging.warning("IMPORTANT: Camera Is In Calibration Mode ....")
             speed_camera(config, db, vs)  # run main speed camera processing loop
     except KeyboardInterrupt:
-        vs.stop()
-        print("")
-        logging.info("User Pressed Keyboard ctrl-c")
-        logging.info("%s %s Exiting Program", app_constants.progName, app_constants.progVer)
         sys.exit()
+    except SystemExit:
+        raise
+    finally:
+        if config.gui_window_on:
+            cv2.destroyAllWindows()
+        if vs is not None:
+            vs.stop()
+        logging.info("")
+        logging.info("%s %s Exiting Program", app_constants.progName, app_constants.progVer)
 
 
 if __name__ == '__main__':
