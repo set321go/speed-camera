@@ -65,11 +65,11 @@ def get_fps(start_time, frame_count):
 
 
 # ------------------------------------------------------------------------------
-def get_image_name(path, prefix):
+def get_image_name(storage_utils, prefix):
     """ build image file names by number sequence or date/time Added tenth of second"""
     right_now = datetime.datetime.now()
     filename = ("%s/%s%04d%02d%02d-%02d%02d%02d%d.jpg" %
-                (path, prefix, right_now.year, right_now.month, right_now.day,
+                (storage_utils.get_image_path(), prefix, right_now.year, right_now.month, right_now.day,
                  right_now.hour, right_now.minute, right_now.second, right_now.microsecond/100000))
     return filename
 
@@ -135,8 +135,7 @@ def speed_camera(config, db, vs):
     else:
         text_y = 10  # show text at top of image
     # Initialize prev_image used for taking speed image photo
-    last_space_check = datetime.datetime.now()
-    speed_path = config.image_path
+    storage_utils = utils.StorageUtils(config)
     csv = CSVStorageService(config)
     if config.calibrate:
         logging.warning("IMPORTANT: Camera Is In Calibration Mode ....")
@@ -246,15 +245,9 @@ def speed_camera(config, db, vs):
                                 # There are no subdirectories to deal with
                                 if config.calibrate:
                                     log_time = datetime.datetime.now()
-                                    filename = get_image_name(speed_path, "calib-")
+                                    filename = get_image_name(storage_utils, "calib-")
                                     prev_image = calibration.take_calibration_image(config, ave_speed, filename, prev_image)
                                 else:
-                                    # Check if subdirectories configured
-                                    # and create as required
-                                    speed_path = utils.subDirChecks(config.imageSubDirMaxHours,
-                                                                    config.imageSubDirMaxFiles,
-                                                                    config.image_path,
-                                                                    config.image_prefix)
                                     # Create image file name prefix
                                     if config.image_filename_speed:
                                         speed_prefix = (str(int(round(ave_speed)))
@@ -264,7 +257,7 @@ def speed_camera(config, db, vs):
                                     # Record log_time for use later in csv and sqlite
                                     log_time = datetime.datetime.now()
                                     # create image file name path
-                                    filename = get_image_name(speed_path,
+                                    filename = get_image_name(storage_utils,
                                                               speed_prefix)
                                 # Add motion rectangle to image if required
                                 if config.image_show_motion_area:
@@ -382,21 +375,19 @@ def speed_camera(config, db, vs):
                                                        travel_direction,
                                                        app_constants.QUOTE))
                                     csv.write_line(log_csv_text)
-                                if config.spaceTimerHrs > 0:
-                                    last_space_check = utils.freeDiskSpaceCheck(last_space_check, config)
+                                # Check if we need to clean the disk
+                                storage_utils.free_space_check()
+                                storage_utils.rotate_image_dir()
                                 # Manage a maximum number of files
                                 # and delete oldest if required.
                                 if config.image_max_files > 0:
-                                    utils.deleteOldFiles(config.image_max_files,
-                                                         speed_path,
-                                                         config.image_prefix)
+                                    utils.StorageUtils.delete_old_files(config.image_max_files,
+                                                                        storage_utils.get_image_path(),
+                                                                        config.image_prefix)
                                 # Save most recent files
                                 # to a recent folder if required
                                 if config.imageRecentMax > 0 and not config.calibrate:
-                                    utils.saveRecent(config.imageRecentMax,
-                                                     config.imageRecentDir,
-                                                     filename,
-                                                     config.image_prefix)
+                                    storage_utils.save_recent(filename)
 
                                 logging.info("End  - Ave Speed %.1f %s Tracked %i px in %.3f sec Calib %ipx %imm",
                                              ave_speed, config.get_speed_units(),

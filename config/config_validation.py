@@ -7,8 +7,19 @@ def remove_python_extension(file_name):
         return file_name
 
 
+def enforce_lower_bound_int(value, bound):
+    if value < bound:
+        return bound
+    else:
+        return value
+
+
 def enforce_lower_bound_float(value, bound):
     if value < bound:
         return bound
     else:
         return value
+
+
+def clean_file_ext_names(value):
+    return value[1:] if value.startswith('.') else value

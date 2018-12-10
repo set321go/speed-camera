@@ -1,10 +1,10 @@
 import logging
 import sys
-import os
 from config import app_constants
 import subprocess
 import importlib
 from importlib import util
+from speedcam.storage.utils import StorageUtils
 
 
 def init_boot_logger():
@@ -43,27 +43,12 @@ def init_logger(config):
 
 
 def create_dir(config):
-    cwd = os.getcwd()
-    html_path = "media/html"
-    if not os.path.isdir(config.image_path):
-        logging.info("Creating Image Storage Folder %s", config.image_path)
-        os.makedirs(config.image_path)
-    os.chdir(config.image_path)
-    os.chdir(cwd)
+    storage_utils = StorageUtils(config)
+    StorageUtils.create_dir(storage_utils.get_image_path())
+    StorageUtils.create_dir(storage_utils.get_html_path())
+    StorageUtils.create_dir(storage_utils.get_search_results_path())
     if config.imageRecentMax > 0:
-        if not os.path.isdir(config.imageRecentDir):
-            logging.info("Create Recent Folder %s", config.imageRecentDir)
-            try:
-                os.makedirs(config.imageRecentDir)
-            except OSError as err:
-                logging.error('Failed to Create Folder %s - %s', config.imageRecentDir, err)
-    if not os.path.isdir(config.search_dest_path):
-        logging.info("Creating Search Folder %s", config.search_dest_path)
-        os.makedirs(config.search_dest_path)
-    if not os.path.isdir(html_path):
-        logging.info("Creating html Folder %s", html_path)
-        os.makedirs(html_path)
-    os.chdir(cwd)
+        StorageUtils.create_dir(storage_utils.get_image_recent_path())
 
 
 def import_cv2():
