@@ -27,6 +27,7 @@ class SqlLiteStorageService:
 
         self.DB_PATH = os.path.join(config.data_dir, self.DB_NAME)
         self.conn = None
+        self.config = config
 
     def start(self):
         if not self.__exists():
@@ -46,6 +47,47 @@ class SqlLiteStorageService:
             logging.error("Err Msg: %s", e)
         else:
             logging.info(" SQL - Update sqlite3 Data in %s", self.DB_PATH)
+
+    def format_data(self, log_time, filename, travel_direction, ave_speed, track_x, track_y, track_w, track_h):
+        # Needs a bunch of cleanup. at least 50% of each row being saved are config constants.
+        # Must be a better way of formatting date strings
+        log_idx = ("%04d%02d%02d-%02d%02d%02d%d" %
+                   (log_time.year,
+                    log_time.month,
+                    log_time.day,
+                    log_time.hour,
+                    log_time.minute,
+                    log_time.second,
+                    log_time.microsecond/100000))
+        log_date = ("%04d%02d%02d" %
+                    (log_time.year,
+                     log_time.month,
+                     log_time.day))
+        log_hour = ("%02d" % log_time.hour)
+        log_minute = ("%02d" % log_time.minute)
+        m_area = track_w*track_h
+        rounded_avg_speed = round(ave_speed, 2)
+        if self.config.WEBCAM:
+            camera = "WebCam"
+        else:
+            camera = "PiCam"
+        if self.config.pluginEnable:
+            plugin_name = self.config.pluginName
+        else:
+            plugin_name = "None"
+        return (log_idx,
+                log_date, log_hour, log_minute,
+                camera,
+                rounded_avg_speed, self.config.get_speed_units(), filename,
+                self.config.get_image_width(), self.config.get_image_height(), self.config.image_bigger,
+                travel_direction, plugin_name,
+                track_x, track_y,
+                track_w, track_h, m_area,
+                self.config.x_left, self.config.x_right,
+                self.config.y_upper, self.config.y_lower,
+                self.config.max_speed_over,
+                self.config.MIN_AREA, self.config.track_counter,
+                self.config.cal_obj_px, self.config.cal_obj_mm)
 
     def __create(self):
         logging.warning("File Not Found %s", self.DB_PATH)

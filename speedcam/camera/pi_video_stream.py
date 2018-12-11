@@ -1,5 +1,6 @@
 import logging
 import sys
+import time
 from threading import Thread
 from config import app_constants
 from picamera import PiCamera
@@ -29,6 +30,8 @@ class PiVideoStream:
         """
         self.frame = None
         self.stopped = False
+        self.frame_count = -1
+        self.fps_time = time.time()
 
     def start(self):
         """ start the thread to read frames from the video stream """
@@ -60,3 +63,18 @@ class PiVideoStream:
     def stop(self):
         """ indicate that the thread should be stopped """
         self.stopped = True
+
+    def get_fps(self):
+        """ Calculate and display frames per second processing """
+        fps = -1
+        if self.frame_count < 0:
+            self.frame_count = 1
+            self.fps_time = time.time()
+        if self.frame_count >= 1000:
+            duration = float(time.time() - self.fps_time)
+            fps = float(self.frame_count / duration)
+            self.frame_count = 0
+            self.fps_time = time.time()
+        else:
+            self.frame_count += 1
+        return fps
