@@ -42,6 +42,7 @@ import datetime
 import sys
 import logging
 import importlib
+import collections
 from speedcam.camera.utils import *
 from speedcam.camera import calibration
 from config import app_constants
@@ -50,48 +51,7 @@ from speedcam.startup import startup_helpers
 from speedcam.storage import SqlLiteStorageService, CSVStorageService, utils
 
 
-# ------------------------------------------------------------------------------
-def get_image_name(storage_utils, prefix):
-    """ build image file names by number sequence or date/time Added tenth of second"""
-    right_now = datetime.datetime.now()
-    filename = ("%s/%s%04d%02d%02d-%02d%02d%02d%d.jpg" %
-                (storage_utils.get_image_path(), prefix, right_now.year, right_now.month, right_now.day,
-                 right_now.hour, right_now.minute, right_now.second, right_now.microsecond/100000))
-    return filename
-
-
-def crop_image(config, image):
-    try:
-        # crop image to motion tracking area only
-        image_crop = image[config.y_upper:config.y_lower, config.x_left:config.x_right]
-    except ValueError:
-        logging.warning("image Stream Image is Not Complete. Cannot Crop.")
-        image_crop = None
-    return image_crop
-
-
-def create_filename_log_time(config, storage_utils, ave_speed):
-    # Create a calibration image file name
-    # There are no subdirectories to deal with
-    if config.calibrate:
-        log_time = datetime.datetime.now()
-        filename = get_image_name(storage_utils, "calib-")
-    else:
-        # Create image file name prefix
-        if config.image_filename_speed:
-            speed_prefix = (str(int(round(ave_speed)))
-                            + "-" + config.image_prefix)
-        else:
-            speed_prefix = config.image_prefix
-        # Record log_time for use later in csv and sqlite
-        log_time = datetime.datetime.now()
-        # create image file name path
-        filename = get_image_name(storage_utils, speed_prefix)
-
-    return filename, log_time
-
-
-def draw_overlay(config, img, x, y, w, h):
+def draw_geom_overlay(config, img, x, y, w, h):
     # show centre of motion if required
     if config.SHOW_CIRCLE:
         cv2.circle(img,
@@ -107,31 +67,13 @@ def draw_overlay(config, img, x, y, w, h):
                       cvGreen, config.LINE_THICKNESS)
 
 
-def find_biggest_area_in_bounds(config, contours):
-    track_x, track_y, track_w, track_h = None, None, None, None
-    biggest_area = config.MIN_AREA
-    for c in contours:
-        # get area of contour
-        found_area = cv2.contourArea(c)
-        if found_area > biggest_area:
-            (x, y, w, h) = cv2.boundingRect(c)
-            # check if object contour is completely within crop area
-            if x > config.get_x_buf() and x + w < config.x_right - config.x_left - config.get_x_buf():
-                track_x = x
-                track_y = y
-                track_w = w  # movement width of object contour
-                track_h = h  # movement height of object contour
-                biggest_area = found_area
-    return biggest_area, track_x, track_y, track_w, track_h
-
-
 def update_gui(config, image, image_crop, track):
     # track = (x, y, w, h)
     if config.gui_window_on:
         # show small circle at contour xy if required
         # otherwise a rectangle around most recent contour
         if track is not None:
-            draw_overlay(config, image, track[0], track[1], track[2], track[3])
+            draw_geom_overlay(config, image, track[0], track[1], track[2], track[3])
         image = speed_image_add_lines(config, image, cvRed)
         image_view = cv2.resize(image, (config.get_image_width(), config.get_image_height()))
         cv2.imshow('Movement (q Quits)', image_view)
@@ -143,6 +85,44 @@ def update_gui(config, image, image_crop, track):
         # Close Window if q pressed
         if cv2.waitKey(1) & 0xFF == ord('q'):
             sys.exit()
+
+
+class ImgProcessor:
+    def __init__(self, config, storage_utils, tracking, cur_track_time):
+        self.track_time = datetime.datetime.fromtimestamp(cur_track_time)
+        self.tracking = tracking
+        self.storage_utils = storage_utils
+        self.config = config
+        self.filename = self.__create_filename()
+
+    def __create_filename(self):
+        # Create a calibration image file name
+        # There are no subdirectories to deal with
+        if self.config.calibrate:
+            return self.__get_image_name("calib-")
+        else:
+            # Create image file name prefix
+            if self.config.image_filename_speed:
+                speed_prefix = (str(int(round(self.tracking.ave_speed)))
+                                + "-" + self.config.image_prefix)
+            else:
+                speed_prefix = self.config.image_prefix
+            # create image file name path
+            return self.__get_image_name(speed_prefix)
+
+    def __get_image_name(self, prefix):
+        """ build image file names by number sequence or date/time Added tenth of second"""
+        return ("%s/%s%04d%02d%02d-%02d%02d%02d%d.jpg" %
+                (self.storage_utils.get_image_path(), prefix, self.track_time.year, self.track_time.month, self.track_time.day,
+                 self.track_time.hour, self.track_time.minute, self.track_time.second, self.track_time.microsecond/100000))
+
+    def save_img(self, capture, tracking_box):
+        big_image = capture.process_img(self.tracking.get_avg_speed(), self.filename,
+                                        tracking_box.track_x, tracking_box.track_y, tracking_box.track_w, tracking_box.track_h)
+
+        logging.info(" Saved %s", self.filename)
+        # Save resized image
+        cv2.imwrite(self.filename, big_image)
 
 
 class MotionTrack:
@@ -173,6 +153,15 @@ class MotionTrack:
         # ave_speed = float((abs(tot_track_dist / tot_track_time)) * speed_conv)
         return sum(self.speed_list) / float(len(self.speed_list))
 
+    def get_travel_dir(self):
+        return "L2R" if self.end_pos_x - self.prev_end_pos_x > 0 else "R2L"
+
+    def calculate_track_dist(self, track_x):
+        return abs(track_x - self.start_pos_x)
+
+    def calculate_track_time(self, cur_track_time):
+        return abs(self.track_start_time - cur_track_time)
+
     def record_speed(self, curr_track_time):
         cur_track_dist = abs(self.end_pos_x - self.prev_end_pos_x)
         self.cur_ave_speed = float((abs(cur_track_dist /
@@ -191,11 +180,30 @@ class MotionTrack:
         self.speed_list = []
         self.first_event = False
 
+    def find_biggest_area_in_bounds(self, contours):
+        track_x, track_y, track_w, track_h = None, None, None, None
+        biggest_area = self.config.MIN_AREA
+        for c in contours:
+            # get area of contour
+            found_area = cv2.contourArea(c)
+            if found_area > biggest_area:
+                (x, y, w, h) = cv2.boundingRect(c)
+                # check if object contour is completely within crop area
+                if x > self.config.get_x_buf() and x + w < self.config.x_right - self.config.x_left - self.config.get_x_buf():
+                    track_x = x
+                    track_y = y
+                    track_w = w  # movement width of object contour
+                    track_h = h  # movement height of object contour
+                    biggest_area = found_area
+        TrackingBox = collections.namedtuple('TrackingBox', ['track_x', 'track_y', 'track_w', 'track_h'])
+        return biggest_area, TrackingBox(track_x, track_y, track_w, track_h) if (track_x, track_y, track_w, track_h) is not None else None
+
 
 class Capture:
     def __init__(self, config, vs):
         self.config = config
         self.stream = vs
+        self.contours = []
         self.curr_img = None
         self.curr_img_crop = None
         self.curr_img_gray = None
@@ -203,13 +211,45 @@ class Capture:
         self.prev_img_crop = None
         self.prev_img_gray = None
 
+    def __draw_text_overlay(self, filename, ave_speed, big_image):
+        image_text = ("SPEED %.1f %s - %s"
+                      % (ave_speed,
+                         self.config.get_speed_units(),
+                         filename))
+        text_x = int((self.config.get_image_width() / 2) -
+                     (len(image_text) *
+                      self.config.image_font_size / 3))
+        if text_x < 2:
+            text_x = 2
+        # Calculate position of text on the images
+        if self.config.image_text_bottom:
+            text_y = (self.config.get_image_height() - 50)  # show text at bottom of image
+        else:
+            text_y = 10  # show text at top of image
+        cv2.putText(big_image,
+                    image_text,
+                    (text_x, text_y),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    self.config.FONT_SCALE,
+                    cvWhite,
+                    2)
+
+    def __crop_image(self):
+        try:
+            # crop image to motion tracking area only
+            image_crop = self.curr_img[self.config.y_upper:self.config.y_lower, self.config.x_left:self.config.x_right]
+        except ValueError:
+            logging.warning("image Stream Image is Not Complete. Cannot Crop.")
+            image_crop = None
+        return image_crop
+
     def update_curr_img(self):
         self.curr_img = self.stream.read()
-        self.curr_img_crop = crop_image(self.config, self.curr_img)
+        self.curr_img_crop = self.__crop_image()
         if self.curr_img_crop is not None:
             self.curr_img_gray = cv2.cvtColor(self.curr_img_crop, cv2.COLOR_BGR2GRAY)
 
-    def speed_get_contours(self):
+    def calculate_speed_contours(self):
         self.prev_img = self.curr_img
         self.prev_img_crop = self.curr_img_crop
         self.prev_img_gray = self.curr_img_gray
@@ -218,7 +258,7 @@ class Capture:
         while not image_ok:
             self.curr_img = self.stream.read()  # Read image data from video steam thread instance
             # crop image to motion tracking area only
-            self.curr_img_crop = crop_image(self.config, self.curr_img)
+            self.curr_img_crop = self.__crop_image()
             if self.curr_img_crop is not None:
                 image_ok = True
 
@@ -244,21 +284,33 @@ class Capture:
                                                                    cv2.RETR_EXTERNAL,
                                                                    cv2.CHAIN_APPROX_SIMPLE)
 
-        return contours
+        self.contours = contours
+
+    def process_img(self, ave_speed, filename, track_x, track_y, track_w, track_h):
+        processed_img = self.curr_img
+        if self.config.calibrate:
+            processed_img = calibration.take_calibration_image(self.config, ave_speed, filename, processed_img)
+        # Add motion rectangle to image if required
+        if self.config.image_show_motion_area:
+            processed_img = speed_image_add_lines(self.config, processed_img, cvRed)
+            draw_geom_overlay(self.config, processed_img, track_x, track_y, track_w, track_h)
+        # Write text on image
+        if self.config.image_text_on:
+            self.__draw_text_overlay(filename, ave_speed, processed_img)
+
+        return cv2.resize(processed_img, (self.config.get_image_width(), self.config.get_image_height()))
 
 
 # ------------------------------------------------------------------------------
 def speed_camera(config, db, vs):
     """ Main speed camera processing function """
-    # Calculate position of text on the images
-    if config.image_text_bottom:
-        text_y = (config.get_image_height() - 50)  # show text at bottom of image
-    else:
-        text_y = 10  # show text at top of image
+    logging.info("Begin Motion Tracking .....")
     storage_utils = utils.StorageUtils(config)
     csv = CSVStorageService(config)
-    logging.info("Begin Motion Tracking .....")
     capture = Capture(config, vs)
+    tracking = MotionTrack(config)
+    # ---------------------------
+    # This logic doesn't really belong here we should encapsulate this
     capture.update_curr_img()
     if capture.curr_img_crop is None:
         # Should maybe use an exception here
@@ -267,18 +319,14 @@ def speed_camera(config, db, vs):
         logging.warning("Restarting Camera.  One Moment Please ...")
         time.sleep(4)
         return
-    tracking = MotionTrack(config)
-    still_scanning = True
-    while still_scanning:  # process camera thread images and calculate speed
-        image2 = vs.read()  # Read image data from video steam thread instance
-        contours = capture.speed_get_contours()
+    # ---------------------------
+    while True:  # process camera thread images and calculate speed
+        capture.calculate_speed_contours()
         # if contours found, find the one with biggest area
-        motion_found = False
-        if contours:
-            total_contours = len(contours)
-            biggest_area, track_x, track_y, track_w, track_h = find_biggest_area_in_bounds(config, contours)
+        if capture.contours:
+            biggest_area, tracking_box = tracking.find_biggest_area_in_bounds(capture.contours)
 
-            if track_x is not None:
+            if tracking_box is not None:
                 cur_track_time = time.time()  # record cur track time
                 # Check if last motion event timed out
                 if tracking.has_exceeded_track_timeout():
@@ -289,84 +337,42 @@ def speed_camera(config, db, vs):
                 # Process motion events and track object movement
                 ##############################
                 if tracking.is_first_event():   # This is a first valid motion event
-                    tracking.restart_tracking(cur_track_time, track_x)
-                    logging.info("New  - 0/%i xy(%i,%i) Start New Track", config.track_counter, track_x, track_y)
+                    tracking.restart_tracking(cur_track_time, tracking_box.track_x)
+                    logging.info("New  - 0/%i xy(%i,%i) Start New Track", config.track_counter, tracking_box.track_x, tracking_box.track_y)
                 else:
                     tracking.prev_end_pos_x = tracking.end_pos_x
-                    tracking.end_pos_x = track_x
-                    if tracking.end_pos_x - tracking.prev_end_pos_x > 0:
-                        travel_direction = "L2R"
-                    else:
-                        travel_direction = "R2L"
+                    tracking.end_pos_x = tracking_box.track_x
                     # check if movement is within acceptable distance range of last event
                     if config.x_diff_min < abs(tracking.end_pos_x - tracking.prev_end_pos_x) < config.x_diff_max:
                         tracking.track_count += 1  # increment
                         tracking.record_speed(cur_track_time)
                         tracking.prev_start_time = cur_track_time
                         if tracking.has_track_count_exceeded_track_limit():
-                            # track_x only read after this
-                            # tracking.start_pos_x doesn't change below this
-                            tot_track_dist = abs(track_x - tracking.start_pos_x)
-                            # cur_track_time not used after this
-                            # tracking.track_start_time doesn't change below this
-                            tot_track_time = abs(tracking.track_start_time - cur_track_time)
-                            ave_speed = tracking.get_avg_speed()
                             # Track length exceeded so take process speed photo
-                            if ave_speed > config.max_speed_over or config.calibrate:
+                            if tracking.get_avg_speed() > config.max_speed_over or config.calibrate:
                                 logging.info(" Add - %i/%i xy(%i,%i) %3.2f %s"
                                              " D=%i/%i C=%i %ix%i=%i sqpx %s",
                                              tracking.track_count, config.track_counter,
-                                             track_x, track_y,
+                                             tracking_box.track_x, tracking_box.track_y,
                                              tracking.cur_ave_speed, config.get_speed_units(),
-                                             abs(track_x - tracking.prev_end_pos_x),
+                                             abs(tracking_box.track_x - tracking.prev_end_pos_x),
                                              config.x_diff_max,
-                                             total_contours,
-                                             track_w, track_h, biggest_area,
-                                             travel_direction)
-                                # Resize and process previous image
-                                # before saving to disk
-                                prev_image = image2
-                                filename, log_time = create_filename_log_time(config, storage_utils, ave_speed)
-                                if config.calibrate:
-                                    prev_image = calibration.take_calibration_image(config, ave_speed, filename, prev_image)
-                                # Add motion rectangle to image if required
-                                if config.image_show_motion_area:
-                                    prev_image = speed_image_add_lines(config, prev_image, cvRed)
-                                    draw_overlay(config, prev_image, track_x, track_y, track_w, track_h)
-                                big_image = cv2.resize(prev_image,
-                                                       (config.get_image_width(),
-                                                        config.get_image_height()))
-                                # Write text on image before saving
-                                # if required.
-                                if config.image_text_on:
-                                    image_text = ("SPEED %.1f %s - %s"
-                                                  % (ave_speed,
-                                                     config.get_speed_units(),
-                                                     filename))
-                                    text_x = int((config.get_image_width() / 2) -
-                                                 (len(image_text) *
-                                                  config.image_font_size / 3))
-                                    if text_x < 2:
-                                        text_x = 2
-                                    cv2.putText(big_image,
-                                                image_text,
-                                                (text_x, text_y),
-                                                cv2.FONT_HERSHEY_SIMPLEX,
-                                                config.FONT_SCALE,
-                                                cvWhite,
-                                                2)
-                                logging.info(" Saved %s", filename)
-                                # Save resized image
-                                cv2.imwrite(filename, big_image)
-                                # if required check free disk space
-                                # and delete older files (jpg)
+                                             len(capture.contours),
+                                             tracking_box.track_w, tracking_box.track_h, biggest_area,
+                                             tracking.get_travel_dir())
+
+                                img_processor = ImgProcessor(config, storage_utils, tracking, cur_track_time)
+                                img_processor.save_img(capture, tracking_box)
+
                                 if db.is_available():
-                                    db.save_speed_data(db.format_data(log_time, filename, travel_direction,
-                                                                      ave_speed, track_x, track_y, track_w, track_h))
+                                    db.save_speed_data(db.format_data(datetime.datetime.fromtimestamp(cur_track_time),
+                                                                      img_processor.filename, tracking.get_travel_dir(),
+                                                                      tracking.get_avg_speed(), tracking_box))
                                 # Format and Save Data to CSV Log File
                                 if csv.is_active:
-                                    csv.write_line(csv.format_data(log_time, filename, travel_direction,
-                                                                   ave_speed, track_x, track_y, track_w, track_h))
+                                    csv.write_line(csv.format_data(datetime.datetime.fromtimestamp(cur_track_time), img_processor.filename,
+                                                                   tracking.get_travel_dir(), tracking.get_avg_speed(),
+                                                                   tracking_box))
                                 # Check if we need to clean the disk
                                 storage_utils.free_space_check()
                                 # Check if we need to rotate the image dir
@@ -380,12 +386,12 @@ def speed_camera(config, db, vs):
                                 # Save most recent files
                                 # to a recent folder if required
                                 if config.imageRecentMax > 0 and not config.calibrate:
-                                    storage_utils.save_recent(filename)
+                                    storage_utils.save_recent(img_processor.filename)
 
                                 logging.info("End  - Ave Speed %.1f %s Tracked %i px in %.3f sec Calib %ipx %imm",
-                                             ave_speed, config.get_speed_units(),
-                                             tot_track_dist,
-                                             tot_track_time,
+                                             tracking.get_avg_speed(), config.get_speed_units(),
+                                             tracking.calculate_track_dist(tracking_box.track_x),
+                                             tracking.calculate_track_time(cur_track_time),
                                              config.cal_obj_px,
                                              config.cal_obj_mm)
                                 logging.info(app_constants.horz_line)
@@ -397,9 +403,9 @@ def speed_camera(config, db, vs):
                                 logging.info("End  - Skip Photo SPEED %.1f %s"
                                              " max_speed_over=%i  %i px in %.3f sec"
                                              " C=%i A=%i sqpx",
-                                             ave_speed, config.get_speed_units(),
-                                             config.max_speed_over, tot_track_dist,
-                                             tot_track_time, total_contours,
+                                             tracking.get_avg_speed(), config.get_speed_units(),
+                                             config.max_speed_over, tracking.calculate_track_dist(tracking_box.track_x),
+                                             tracking.calculate_track_time(cur_track_time), len(capture.contours),
                                              biggest_area)
                                 # Optional Wait to avoid dual tracking
                                 if config.track_timeout > 0:
@@ -411,14 +417,14 @@ def speed_camera(config, db, vs):
                             logging.info(" Add - %i/%i xy(%i,%i) %3.2f %s"
                                          " D=%i/%i C=%i %ix%i=%i sqpx %s",
                                          tracking.track_count, config.track_counter,
-                                         track_x, track_y,
+                                         tracking_box.track_x, tracking_box.track_y,
                                          tracking.cur_ave_speed, config.get_speed_units(),
-                                         abs(track_x - tracking.prev_end_pos_x),
+                                         abs(tracking_box.track_x - tracking.prev_end_pos_x),
                                          config.x_diff_max,
-                                         total_contours,
-                                         track_w, track_h, biggest_area,
-                                         travel_direction)
-                            tracking.end_pos_x = track_x
+                                         len(capture.contours),
+                                         tracking_box.track_w, tracking_box.track_h, biggest_area,
+                                         tracking.get_travel_dir())
+                            tracking.end_pos_x = tracking_box.track_x
                             # valid motion found so update event_timer
                             tracking.event_timer = time.time()
                     # Movement was not within range parameters
@@ -426,16 +432,16 @@ def speed_camera(config, db, vs):
                         if config.show_out_range:
                             # movements exceeds Max px movement
                             # allowed so Ignore and do not update event_timer
-                            if abs(track_x - tracking.prev_end_pos_x) >= config.x_diff_max:
+                            if abs(tracking_box.track_x - tracking.prev_end_pos_x) >= config.x_diff_max:
                                 logging.info(" Out - %i/%i xy(%i,%i) Max D=%i>=%ipx"
                                              " C=%i %ix%i=%i sqpx %s",
                                              tracking.track_count, config.track_counter,
-                                             track_x, track_y,
-                                             abs(track_x - tracking.prev_end_pos_x),
+                                             tracking_box.track_x, tracking_box.track_y,
+                                             abs(tracking_box.track_x - tracking.prev_end_pos_x),
                                              config.x_diff_max,
-                                             total_contours,
-                                             track_w, track_h, biggest_area,
-                                             travel_direction)
+                                             len(capture.contours),
+                                             tracking_box.track_w, tracking_box.track_h, biggest_area,
+                                             tracking.get_travel_dir())
                                 # if track_count is over half way then do not start new track
                                 if tracking.track_count > config.track_counter / 2:
                                     pass
@@ -447,18 +453,17 @@ def speed_camera(config, db, vs):
                                 logging.info(" Out - %i/%i xy(%i,%i) Min D=%i<=%ipx"
                                              " C=%i %ix%i=%i sqpx %s",
                                              tracking.track_count, config.track_counter,
-                                             track_x, track_y,
-                                             abs(track_x - tracking.end_pos_x),
+                                             tracking_box.track_x, tracking_box.track_y,
+                                             abs(tracking_box.track_x - tracking.end_pos_x),
                                              config.x_diff_min,
-                                             total_contours,
-                                             track_w, track_h, biggest_area,
-                                             travel_direction)
+                                             len(capture.contours),
+                                             tracking_box.track_w, tracking_box.track_h, biggest_area,
+                                             tracking.get_travel_dir())
                                 # Restart Track if first event otherwise continue
                                 if tracking.track_count == 0:
                                     tracking.first_event = True
                         tracking.event_timer = time.time()  # Reset Event Timer
-        track = (track_x, track_y, track_w, track_h) if contours and motion_found else None
-        update_gui(config, image2, capture.curr_img_crop, track)
+                update_gui(config, capture.curr_img, capture.curr_img_crop, tracking_box)
         if config.display_fps:   # Optionally show motion image processing loop fps
             logging.info("%.2f fps", vs.get_fps())
 

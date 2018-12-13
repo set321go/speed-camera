@@ -29,7 +29,7 @@ class CSVStorageService:
 
         logging.info("   CSV - Updated Data  %s", self.log_file_path)
 
-    def format_data(self, log_time, filename, travel_direction, ave_speed, track_x, track_y, track_w, track_h):
+    def format_data(self, log_time, filename, travel_direction, ave_speed, tracking_box):
         # Needs a bunch of cleanup. at least 50% of each row being saved are config constants.
         # Must be a better way of formatting date strings
         log_csv_time = ("%s%04d%02d%02d%s,"
@@ -54,9 +54,9 @@ class CSVStorageService:
                    app_constants.QUOTE,
                    filename,
                    app_constants.QUOTE,
-                   track_x, track_y,
-                   track_w, track_h,
-                   track_w * track_h,
+                   tracking_box.track_x, tracking_box.track_y,
+                   tracking_box.track_w, tracking_box.track_h,
+                   tracking_box.track_w * tracking_box.track_h,
                    app_constants.QUOTE,
                    travel_direction,
                    app_constants.QUOTE))
