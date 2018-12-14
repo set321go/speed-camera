@@ -1,6 +1,6 @@
 import logging
 import os
-from config import app_constants
+from config.app_constants import QUOTE
 
 
 class CSVStorageService:
@@ -34,29 +34,29 @@ class CSVStorageService:
         # Must be a better way of formatting date strings
         log_csv_time = ("%s%04d%02d%02d%s,"
                         "%s%02d%s,%s%02d%s"
-                        % (app_constants.QUOTE,
+                        % (QUOTE,
                            log_time.year,
                            log_time.month,
                            log_time.day,
-                           app_constants.QUOTE,
-                           app_constants.QUOTE,
+                           QUOTE,
+                           QUOTE,
                            log_time.hour,
-                           app_constants.QUOTE,
-                           app_constants.QUOTE,
+                           QUOTE,
+                           QUOTE,
                            log_time.minute,
-                           app_constants.QUOTE))
+                           QUOTE))
         return ("%s,%.2f,%s%s%s,%s%s%s,%i,%i,%i,%i,%i,%s%s%s"
                 % (log_csv_time,
                    ave_speed,
-                   app_constants.QUOTE,
+                   QUOTE,
                    self.config.get_speed_units(),
-                   app_constants.QUOTE,
-                   app_constants.QUOTE,
+                   QUOTE,
+                   QUOTE,
                    filename,
-                   app_constants.QUOTE,
+                   QUOTE,
                    tracking_box.track_x, tracking_box.track_y,
                    tracking_box.track_w, tracking_box.track_h,
                    tracking_box.track_w * tracking_box.track_h,
-                   app_constants.QUOTE,
+                   QUOTE,
                    travel_direction,
-                   app_constants.QUOTE))
+                   QUOTE))

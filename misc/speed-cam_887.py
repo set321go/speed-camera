@@ -119,7 +119,7 @@ if pluginEnable:     # Check and verify plugin and load variable overlay
         print("        Rerun github curl install script to install plugins")
         print("        https://github.com/pageauc/pi-timolo/wiki/"
               "How-to-Install-or-Upgrade#quick-install")
-        print("        %s %s Exiting Due to Error" % (progName, progVer))
+        print("        %s %s Exiting Due to Error" % (APP_NAME, VERSION))
         sys.exit(1)
     elif not os.path.exists(pluginPath):
         print("ERROR : File Not Found pluginName %s" % pluginPath)
@@ -138,7 +138,7 @@ if pluginEnable:     # Check and verify plugin and load variable overlay
         print("INFO  : or Rerun github curl install command.  See github wiki")
         print("        https://github.com/pageauc/speed-camera/wiki/"
               "How-to-Install-or-Upgrade#quick-install")
-        print("        %s %s Exiting Due to Error" % (progName, progVer))
+        print("        %s %s Exiting Due to Error" % (APP_NAME, VERSION))
         sys.exit(1)
     else:
         pluginCurrent = os.path.join(pluginDir, "current.py")
@@ -149,7 +149,7 @@ if pluginEnable:     # Check and verify plugin and load variable overlay
             print('ERROR : Copy Failed from %s to %s - %s'
                   % (pluginPath, pluginCurrent, err))
             print("        Check permissions, disk space, Etc.")
-            print("        %s %s Exiting Due to Error" % (progName, progVer))
+            print("        %s %s Exiting Due to Error" % (APP_NAME, VERSION))
             sys.exit(1)
         print("INFO  : Import Plugin %s" % pluginPath)
         # add plugin directory to program PATH
@@ -165,7 +165,7 @@ if pluginEnable:     # Check and verify plugin and load variable overlay
             print("WARN  : Failed To Remove File %s - %s"
                   % (pluginCurrentpyc, err))
             print("        %s %s Exiting Due to Error"
-                  % (progName, progVer))
+                  % (APP_NAME, VERSION))
 else:
     logging.info("No Plugins Enabled per pluginEnable=%s", pluginEnable)
 # import the necessary packages
@@ -184,7 +184,7 @@ if not WEBCAM:
         logging.error("Pi Camera Module Not Found %s", camResult)
         logging.error("if supported=0 Enable Camera per command sudo raspi-config")
         logging.error("if detected=0 Check Pi Camera Module is Installed Correctly")
-        logging.error("%s %s Exiting Due to Error", progName, progVer)
+        logging.error("%s %s Exiting Due to Error", APP_NAME, VERSION)
         sys.exit(1)
     else:
         logging.info("Camera Module is Enabled and Connected %s", camResult)
@@ -199,7 +199,7 @@ except ImportError:
     else:
         logging.error("python2 failed to import cv2")
         logging.error("Try RPI Install per command")
-        logging.error("%s %s Exiting Due to Error", progName, progVer)
+        logging.error("%s %s Exiting Due to Error", APP_NAME, VERSION)
     sys.exit(1)
 # fix possible invalid values
 if WINDOW_BIGGER < 1.0:
@@ -240,7 +240,7 @@ class PiVideoStream:
             self.camera = PiCamera()
         except:
             logging.error("PiCamera Already in Use by Another Process")
-            logging.error("%s %s Exiting Due to Error", progName, progVer)
+            logging.error("%s %s Exiting Due to Error", APP_NAME, VERSION)
             sys.exit(1)
         self.camera.resolution = resolution
         self.camera.rotation = rotation
@@ -371,7 +371,7 @@ def show_settings():
     if verbose:
         print("--------------------------------------------------------------------------------")
         print("Note: To Send Full Output to File Use command")
-        print("python -u ./%s | tee -a log.txt" % progName)
+        print("python -u ./%s | tee -a log.txt" % APP_NAME)
         print("Set log_data_to_file=True to Send speed_Data to CSV File %s.log"
               % baseFileName)
         print("--------------------------------- Settings -------------------------------------")
@@ -1120,7 +1120,7 @@ if __name__ == '__main__':
                     logging.error("on Specified SRC")
                     logging.error("and Not Used(busy) by Another Process.")
                     logging.error("%s %s Exiting Due to Error",
-                                  progName, progVer)
+                                  APP_NAME, VERSION)
                     vs.stop()
                     sys.exit(1)
                 time.sleep(4.0)  # Allow WebCam to initialize
@@ -1137,5 +1137,5 @@ if __name__ == '__main__':
         vs.stop()
         print("")
         logging.info("User Pressed Keyboard ctrl-c")
-        logging.info("%s %s Exiting Program", progName, progVer)
+        logging.info("%s %s Exiting Program", APP_NAME, VERSION)
         sys.exit()

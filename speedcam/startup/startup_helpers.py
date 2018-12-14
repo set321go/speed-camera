@@ -1,6 +1,6 @@
 import logging
 import sys
-from config import app_constants
+from config.app_constants import APP_NAME, VERSION, HORZ_LINE
 import subprocess
 import importlib
 from importlib import util
@@ -20,7 +20,7 @@ def init_logger(config):
     else:
         logging.info("Press ctrl-c in this terminal session to Quit")
     logging.info("Boot complete, starting application logger")
-    logging.info("----------------------------------------------------------------------")
+    logging.info(HORZ_LINE)
     # Remove the boot logger that was not configured
     for handler in logging.root.handlers[:]:
         logging.root.removeHandler(handler)
@@ -69,7 +69,7 @@ def import_cv2():
         else:
             logging.error("python2 failed to import cv2")
             logging.error("Try RPI Install per command")
-            logging.error("%s %s Exiting Due to Error", app_constants.progName, app_constants.progVer)
+            logging.error("%s %s Exiting Due to Error", APP_NAME, VERSION)
         sys.exit(1)
 
 
@@ -89,7 +89,7 @@ def look_for_picam(config):
             logging.error("Pi Camera Module Not Found %s", cam_result)
             logging.error("if supported=0 Enable Camera per command sudo raspi-config")
             logging.error("if detected=0 Check Pi Camera Module is Installed Correctly")
-            logging.error("%s %s Exiting Due to Error", app_constants.progName, app_constants.progVer)
+            logging.error("%s %s Exiting Due to Error", APP_NAME, VERSION)
             sys.exit(1)
         else:
             logging.info("Pi Camera Module is Enabled and Connected %s", cam_result)

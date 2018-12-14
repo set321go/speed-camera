@@ -16,7 +16,7 @@ VERSION = None
 
 # What packages are required for this module to be executed?
 REQUIRED = [
-    'opencv-python'
+    'opencv-python', 'Click'
 ]
 
 EXTRAS = {
@@ -101,7 +101,7 @@ setup(
 
     entry_points={
         'console_scripts': [
-            'speed-cam=speedcam.speed_cam:main',
+            'speed-cam=cli:cli',
             'speed-cam-search=search.search_speed:main',
             'speed-cam-server=server.webserver:main'
         ],

@@ -45,7 +45,7 @@ import importlib
 import cv2
 from speedcam.tracking.capture import Capture, CameraException
 from speedcam.tracking.motion import MotionTrack
-from config import app_constants
+from config.app_constants import HORZ_LINE, APP_NAME, VERSION
 from config import Config
 from speedcam.startup import startup_helpers
 from speedcam.storage import SqlLiteStorageService, CSVStorageService, ImgFileUtils, StorageUtils
@@ -140,7 +140,7 @@ def speed_camera(config, db, vs):
                                              tracking.calculate_track_time(cur_track_time),
                                              config.cal_obj_px,
                                              config.cal_obj_mm)
-                                logging.info(app_constants.horz_line)
+                                logging.info(HORZ_LINE)
                                 # Wait to avoid dual tracking same object.
                                 if config.track_timeout > 0:
                                     logging.info("Sleep - %0.2f seconds to Clear Track", config.track_timeout)
@@ -193,10 +193,10 @@ def speed_camera(config, db, vs):
             logging.info("%.2f fps", vs.get_fps())
 
 
-def main():
+def start():
     startup_helpers.init_boot_logger()
-    logging.info("%s %s   written by Claude Pageau", app_constants.progName, app_constants.progVer)
-    logging.info(app_constants.horz_line)
+    logging.info("%s %s   written by Claude Pageau", APP_NAME, VERSION)
+    logging.info(HORZ_LINE)
     logging.info("Loading ...")
 
     config = Config()
@@ -223,7 +223,7 @@ def main():
                     logging.error("USB Web Cam Not Connecting to WEBCAM_SRC %i", config.WEBCAM_SRC)
                     logging.error("Check Camera is Plugged In and Working on Specified SRC")
                     logging.error("and Not Used(busy) by Another Process.")
-                    logging.error("%s %s Exiting Due to Error", app_constants.progName, app_constants.progVer)
+                    logging.error("%s %s Exiting Due to Error", APP_NAME, VERSION)
                     sys.exit(1)
             else:
                 logging.info("Initializing Pi Camera ....")
@@ -249,8 +249,4 @@ def main():
         if vs is not None:
             vs.stop()
         logging.info("")
-        logging.info("%s %s Exiting Program", app_constants.progName, app_constants.progVer)
-
-
-if __name__ == '__main__':
-    main()
+        logging.info("%s %s Exiting Program", APP_NAME, VERSION)

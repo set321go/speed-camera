@@ -3,7 +3,7 @@ import configparser
 import logging
 import sys
 from config import config_validation
-from config import app_constants
+from config.app_constants import CONFIG_DEFAULTS_FILENAME, APP_NAME, VERSION, HORZ_LINE
 
 
 class Config:
@@ -16,7 +16,8 @@ class Config:
         if not os.path.exists(config_file_path):
             logging.warning("Missing config.ini file - Looking for %s", config_file_path)
             logging.info("Using preconfigured defaults")
-            config_file = os.path.join(self.base_dir, 'config', 'default_config.ini')
+            script_dir = os.path.dirname(os.path.realpath(__file__))
+            config_file = os.path.join(script_dir, CONFIG_DEFAULTS_FILENAME)
             config.read(config_file)
         else:
             config.read(config_file_path)
@@ -206,11 +207,11 @@ class Config:
         """Initialize and Display program variable settings from config.py"""
 
         if self.verbose:
-            logging.info(app_constants.horz_line)
+            logging.info(HORZ_LINE)
             logging.info("Note: To Send Full Output to File Use command")
-            logging.info("python -u ./%s | tee -a log.txt", app_constants.progName)
-            logging.info("Set log_data_to_file=True to Send speed_Data to CSV File %s.log", app_constants.progName)
-            logging.info(app_constants.horz_line)
+            logging.info("python -u ./%s | tee -a log.txt", APP_NAME)
+            logging.info("Set log_data_to_file=True to Send speed_Data to CSV File %s.log", APP_NAME)
+            logging.info(HORZ_LINE)
             logging.info("")
 
             logging.info("Debug Messages .. verbose=%s  display_fps=%s calibrate=%s", self.verbose, self.display_fps, self.calibrate)
@@ -259,4 +260,4 @@ class Config:
                 logging.info("                  spaceTimerHrs=%i (0=Off) Target spaceFreeMB=%i (min=100 MB)",
                              self.spaceTimerHrs, self.spaceFreeMB)
             logging.info("")
-            logging.info(app_constants.horz_line)
+            logging.info(HORZ_LINE)

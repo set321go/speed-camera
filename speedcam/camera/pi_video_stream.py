@@ -2,7 +2,7 @@ import logging
 import sys
 import time
 from threading import Thread
-from config import app_constants
+from config.app_constants import APP_NAME, VERSION
 from picamera import PiCamera
 
 
@@ -13,7 +13,7 @@ class PiVideoStream:
             self.camera = PiCamera()
         except:
             logging.error("PiCamera Already in Use by Another Process")
-            logging.error("%s %s Exiting Due to Error", app_constants.progName, app_constants.progVer)
+            logging.error("%s %s Exiting Due to Error", APP_NAME, VERSION)
             sys.exit(1)
         self.camera.resolution = (config.CAMERA_WIDTH, config.CAMERA_HEIGHT)
         self.camera.rotation = config.CAMERA_ROTATION
