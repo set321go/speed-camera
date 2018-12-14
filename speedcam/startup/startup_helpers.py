@@ -4,7 +4,7 @@ from config import app_constants
 import subprocess
 import importlib
 from importlib import util
-from speedcam.storage.utils import StorageUtils
+from speedcam.storage import StorageUtils
 
 
 def init_boot_logger():
@@ -40,6 +40,11 @@ def init_logger(config):
         logging.basicConfig(level=log_level,
                             format=log_format,
                             datefmt=date_format)
+
+
+def gui_message(config):
+    if config.gui_window_on:
+        logging.warning("You have the GUI enabled, playback can be very slow on high resolution devices")
 
 
 def create_dir(config):

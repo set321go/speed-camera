@@ -45,22 +45,16 @@ class StorageUtils:
         else:
             return False
 
-    def get_image_path(self):
-        return self.curr_img_path
+    def __free_space_check(self):
+        """ Free disk space by deleting some older files """
+        if self.config.spaceTimerHrs > 0:   # Check if disk free space timer hours is enabled
+            # See if it is time to do disk clean-up check
+            current_time = datetime.datetime.now()
+            if (current_time - self.last_space_check).total_seconds() > self.config.spaceTimerHrs * 3600:
+                self.free_space()
+                self.last_space_check = current_time
 
-    def get_image_recent_path(self):
-        if os.path.isabs(self.config.imageRecentDir):
-            return self.config.imageRecentDir
-        else:
-            return os.path.join(self.get_image_path(), self.config.imageRecentDir)
-
-    def get_html_path(self):
-        return self.__get_correct_media_path(self.config.html_path)
-
-    def get_search_results_path(self):
-        return self.__get_correct_media_path(self.config.search_dest_path)
-
-    def rotate_image_dir(self):
+    def __rotate_image_dir(self):
         """ Check if motion SubDir needs to be created """
         # only create subdirectories if max files or max hours is greater than zero
         if self.config.imageSubDirMaxHours > 1 or self.config.imageSubDirMaxFiles > 1:
@@ -91,7 +85,7 @@ class StorageUtils:
                     and self.__is_max_files_exceeded(sub_dir_path):
                 self.curr_img_path = self.create_dir(self.generate_dir_name(self.config.image_prefix))
 
-    def save_recent(self, filename):
+    def __save_recent(self, filename):
         """
         Create a symlink file in recent folder or file if non unix system
         or symlink creation fails.
@@ -100,7 +94,7 @@ class StorageUtils:
         src = os.path.abspath(filename)  # Original Source File Path
         # Destination Recent Directory Path
         dest = os.path.abspath(os.path.join(self.get_image_recent_path(), os.path.basename(filename)))
-        StorageUtils.delete_old_files(self.config.imageRecentMax, self.get_image_recent_path(), self.config.image_prefix)
+        StorageUtils.__delete_old_files(self.config.imageRecentMax, self.get_image_recent_path(), self.config.image_prefix)
         try:    # Create symlink in recent folder
             logging.info('   symlink %s', dest)
             os.symlink(src, dest)  # Create a symlink to actual file
@@ -112,6 +106,37 @@ class StorageUtils:
                 logging.error('Copy failed from %s to %s - %s', filename, self.config.imageRecentDir, err)
         except OSError as err:
             logging.error('symlink Failed: %s', err)
+
+    def get_image_path(self):
+        return self.curr_img_path
+
+    def get_image_recent_path(self):
+        if os.path.isabs(self.config.imageRecentDir):
+            return self.config.imageRecentDir
+        else:
+            return os.path.join(self.get_image_path(), self.config.imageRecentDir)
+
+    def get_html_path(self):
+        return self.__get_correct_media_path(self.config.html_path)
+
+    def get_search_results_path(self):
+        return self.__get_correct_media_path(self.config.search_dest_path)
+
+    def filesystem_housekeeping(self, filename):
+        # Check if we need to clean the disk
+        self.__free_space_check()
+        # Check if we need to rotate the image dir
+        self.__rotate_image_dir()
+        # Manage a maximum number of files
+        # and delete oldest if required.
+        if self.config.image_max_files > 0:
+            StorageUtils.__delete_old_files(self.config.image_max_files,
+                                            self.get_image_path(),
+                                            self.config.image_prefix)
+        # Save most recent files
+        # to a recent folder if required
+        if self.config.imageRecentMax > 0 and not self.config.calibrate:
+            self.__save_recent(filename)
 
     def free_space(self):
         """
@@ -157,15 +182,6 @@ class StorageUtils:
         else:
             logging.error('Directory Not Found - %s', media_path)
 
-    def free_space_check(self):
-        """ Free disk space by deleting some older files """
-        if self.config.spaceTimerHrs > 0:   # Check if disk free space timer hours is enabled
-            # See if it is time to do disk clean-up check
-            current_time = datetime.datetime.now()
-            if (current_time - self.last_space_check).total_seconds() > self.config.spaceTimerHrs * 3600:
-                self.free_space()
-                self.last_space_check = current_time
-
     @staticmethod
     def __scan_dir_for_latest(directory):
         """ Scan for directories and return most recent """
@@ -187,23 +203,7 @@ class StorageUtils:
                       reverse=True)
 
     @staticmethod
-    def create_dir(path):
-        if not os.path.isdir(path):
-            logging.info("Creating Folder %s", path)
-            try:
-                os.makedirs(path)
-                return path
-            except OSError as err:
-                logging.error('Failed to Create Folder %s - %s', path, err)
-                return None
-
-    @staticmethod
-    def generate_dir_name(prefix):
-        now = datetime.datetime.now()
-        return '%s%d%02d%02d-%02d%02d' % (prefix, now.year, now.month, now.day, now.hour, now.minute)
-
-    @staticmethod
-    def delete_old_files(max_files, path, prefix):
+    def __delete_old_files(max_files, path, prefix):
         """
         Delete Oldest files gt or
         equal to maxfiles that match filename prefix
@@ -220,3 +220,20 @@ class StorageUtils:
                     os.remove(oldest)
                 except OSError as err:
                     logging.error('Cannot Remove %s - %s', oldest, err)
+
+    @staticmethod
+    def create_dir(path):
+        if not os.path.isdir(path):
+            logging.info("Creating Folder %s", path)
+            try:
+                os.makedirs(path)
+                return path
+            except OSError as err:
+                logging.error('Failed to Create Folder %s - %s', path, err)
+                return None
+
+    @staticmethod
+    def generate_dir_name(prefix):
+        now = datetime.datetime.now()
+        return '%s%d%02d%02d-%02d%02d' % (prefix, now.year, now.month, now.day, now.hour, now.minute)
+
