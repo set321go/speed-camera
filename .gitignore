@@ -49,6 +49,7 @@ Temporary Items
 
 #Python
 __pycache__/
+.pytest_cache/
 
 #JetBrains
 *.iml
