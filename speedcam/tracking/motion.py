@@ -3,6 +3,9 @@ import cv2
 import time
 
 
+TrackingBox = collections.namedtuple('TrackingBox', ['track_x', 'track_y', 'track_w', 'track_h'])
+
+
 class MotionTrack:
     def __init__(self, config):
         self.config = config
@@ -86,6 +89,5 @@ class MotionTrack:
                     track_w = w  # movement width of object contour
                     track_h = h  # movement height of object contour
                     biggest_area = found_area
-        TrackingBox = collections.namedtuple('TrackingBox', ['track_x', 'track_y', 'track_w', 'track_h'])
         box = TrackingBox(track_x, track_y, track_w, track_h)
         return biggest_area, box if all(box) else None

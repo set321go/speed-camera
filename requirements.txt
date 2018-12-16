@@ -3,3 +3,5 @@ PyGnuplot
 click
 inquirer
 cmarkgfm
+pytest
+pytest-mock

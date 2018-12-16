@@ -236,4 +236,3 @@ class StorageUtils:
     def generate_dir_name(prefix):
         now = datetime.datetime.now()
         return '%s%d%02d%02d-%02d%02d' % (prefix, now.year, now.month, now.day, now.hour, now.minute)
-
