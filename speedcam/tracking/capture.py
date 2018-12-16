@@ -1,5 +1,3 @@
-import logging
-from speedcam.camera import calibration
 from speedcam.camera.utils import *
 from speedcam.tracking import utils
 
@@ -95,8 +93,6 @@ class Capture:
 
     def process_img(self, ave_speed, filename, tracking_box):
         processed_img = self.curr_img
-        if self.config.calibrate:
-            processed_img = calibration.take_calibration_image(self.config, ave_speed, filename, processed_img)
         # Add motion rectangle to image if required
         if self.config.image_show_motion_area:
             processed_img = speed_image_add_lines(self.config, processed_img, cvRed)

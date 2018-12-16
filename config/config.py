@@ -3,7 +3,7 @@ import configparser
 import logging
 import sys
 from config import config_validation
-from config.app_constants import CONFIG_DEFAULTS_FILENAME, APP_NAME, VERSION, HORZ_LINE
+from config.app_constants import CONFIG_DEFAULTS_FILENAME, APP_NAME, HORZ_LINE
 
 
 class Config:
@@ -129,34 +129,6 @@ class Config:
         self.search_data_on_image = self.__get_boolean(config, plugin_config, 'SEARCH', 'search_data_on_image', True)
         self.search_match_method = self.__get_int(config, plugin_config, 'SEARCH', 'search_match_method', 3)
 
-    def __get_str(self, config, plugin, section, attr_name, default_value):
-        value = config.get(section, attr_name, fallback=default_value)
-        if plugin is not None:
-            return plugin.get(section, attr_name, fallback=value)
-        else:
-            return value
-
-    def __get_boolean(self, config, plugin, section, attr_name, default_value):
-        value = config.getboolean(section, attr_name, fallback=default_value)
-        if plugin is not None:
-            return plugin.getboolean(section, attr_name, fallback=value)
-        else:
-            return value
-
-    def __get_int(self, config, plugin, section, attr_name, default_value):
-        value = config.getint(section, attr_name, fallback=default_value)
-        if plugin is not None:
-            return plugin.getint(section, attr_name, fallback=value)
-        else:
-            return value
-
-    def __get_float(self, config, plugin, section, attr_name, default_value):
-        value = config.getfloat(section, attr_name, fallback=default_value)
-        if plugin is not None:
-            return plugin.getfloat(section, attr_name, fallback=value)
-        else:
-            return value
-
     def __load_plugin_overrides(self):
         if self.pluginEnable:
             plugin_path = os.path.join(self.base_dir, "plugins", self.pluginName + '.ini')
@@ -261,3 +233,42 @@ class Config:
                              self.spaceTimerHrs, self.spaceFreeMB)
             logging.info("")
             logging.info(HORZ_LINE)
+
+    @staticmethod
+    def __get_str(config, plugin, section, attr_name, default_value):
+        value = config.get(section, attr_name, fallback=default_value)
+        if plugin is not None:
+            return plugin.get(section, attr_name, fallback=value)
+        else:
+            return value
+
+    @staticmethod
+    def __get_boolean(config, plugin, section, attr_name, default_value):
+        value = config.getboolean(section, attr_name, fallback=default_value)
+        if plugin is not None:
+            return plugin.getboolean(section, attr_name, fallback=value)
+        else:
+            return value
+
+    @staticmethod
+    def __get_int(config, plugin, section, attr_name, default_value):
+        value = config.getint(section, attr_name, fallback=default_value)
+        if plugin is not None:
+            return plugin.getint(section, attr_name, fallback=value)
+        else:
+            return value
+
+    @staticmethod
+    def __get_float(config, plugin, section, attr_name, default_value):
+        value = config.getfloat(section, attr_name, fallback=default_value)
+        if plugin is not None:
+            return plugin.getfloat(section, attr_name, fallback=value)
+        else:
+            return value
+
+    @staticmethod
+    def create_from(filename):
+        config = configparser.ConfigParser()
+        if os.path.exists(filename):
+            config.read(filename)
+        return config

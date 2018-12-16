@@ -1,6 +1,8 @@
 import click
 import speedcam.speed_cam
 import config.config_service
+import speedcam.camera.calibration
+import inquirer
 
 
 @click.group()
@@ -16,9 +18,19 @@ def run():
 
 
 @cli.command()
-@click.option('--export-defaults', is_flag=True)
-def setup(export_defaults):
-    if export_defaults:
+def setup():
+    questions = [
+        inquirer.List('options',
+                      message="Choose from the following setup options?",
+                      choices=['Configure Camera', 'Export Default Config'],
+                      ),
+    ]
+
+    answers = inquirer.prompt(questions)
+
+    if answers['options'] == 'Export Default Config':
         config.config_service.default_dump()
-    else:
-        config.config_service.setup()
+    elif answers['options'] == 'Configure Camera':
+        speedcam.camera.calibration.calibrate()
+
+

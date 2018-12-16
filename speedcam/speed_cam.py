@@ -41,12 +41,12 @@ import time
 import datetime
 import sys
 import logging
-import importlib
 import cv2
 from speedcam.tracking.capture import Capture, CameraException
 from speedcam.tracking.motion import MotionTrack
 from config.app_constants import HORZ_LINE, APP_NAME, VERSION
 from config import Config
+from speedcam.camera.utils import connect_to_stream
 from speedcam.startup import startup_helpers
 from speedcam.storage import SqlLiteStorageService, CSVStorageService, ImgFileUtils, StorageUtils
 
@@ -213,24 +213,9 @@ def start():
     try:
         while True:
             # Start Web Cam stream (Note USB webcam must be plugged in)
-            if config.WEBCAM:
-                logging.info("Initializing USB Web Camera ..")
-                # Start video stream on a processor Thread for faster speed
-                webcam_module = importlib.import_module("speedcam.camera.webcam_video_stream")
-                vs = webcam_module.WebcamVideoStream(config).start()
-
-                if vs.failed:
-                    logging.error("USB Web Cam Not Connecting to WEBCAM_SRC %i", config.WEBCAM_SRC)
-                    logging.error("Check Camera is Plugged In and Working on Specified SRC")
-                    logging.error("and Not Used(busy) by Another Process.")
-                    logging.error("%s %s Exiting Due to Error", APP_NAME, VERSION)
-                    sys.exit(1)
-            else:
-                logging.info("Initializing Pi Camera ....")
-                picam_module = importlib.import_module("speedcam.camera.pi_video_stream")
-                # Start a pi-camera video stream thread
-                vs = picam_module.PiVideoStream(config).start()
-                time.sleep(2.0)  # Allow PiCamera to initialize
+            vs = connect_to_stream(config)
+            if vs is None:
+                sys.exit(1)
             if config.calibrate:
                 logging.warning("IMPORTANT: Camera Is In Calibration Mode ....")
             try:

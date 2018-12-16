@@ -1,3 +1,5 @@
 opencv-python
 PyGnuplot
 click
+inquirer
+cmarkgfm
