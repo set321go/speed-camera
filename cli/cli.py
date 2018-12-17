@@ -3,6 +3,7 @@ import speedcam.speed_cam
 import config.config_service
 import speedcam.camera.calibration
 import inquirer
+import server.webserver
 
 
 @click.group()
@@ -15,6 +16,11 @@ def cli(ctx):
 @cli.command()
 def run():
     speedcam.speed_cam.start()
+
+
+@cli.command()
+def start_server():
+    server.webserver.main()
 
 
 @cli.command()

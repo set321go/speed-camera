@@ -23,24 +23,37 @@
 
  Variable Settings are imported from config.py
 """
-import cgi
 import os
 import socket
 import socketserver
 import sys
 import time
-import urllib
+import logging
 from http.server import SimpleHTTPRequestHandler
-from io import StringIO
-from server import __version__
+from pystache import renderer
+import io
+from server.__version__ import __version__
 from config import Config
+from speedcam.startup import startup_helpers
+
+
+def map_file(fullname):
+    if os.path.isdir(fullname):
+        displayname = os.path.basename(fullname) + "/"
+    else:
+        displayname = os.path.basename(fullname)
+
+    return {
+        'is_img': not os.path.isdir(fullname),
+        'modified': time.strftime('%H:%M:%S %d-%b-%Y', time.localtime(os.path.getmtime(fullname))) if not os.path.isdir(fullname) else "",
+        'path': os.path.basename(fullname),
+        'name': displayname
+    }
 
 
 def DirectoryHandlerCompanion(config):
     class DirectoryHandler(SimpleHTTPRequestHandler):
-
         def __init__(self, *args, **kwargs):
-            super(DirectoryHandler, self).__init__(*args, **kwargs)
             self.config = config
 
             if config.web_list_by_datetime:
@@ -54,152 +67,99 @@ def DirectoryHandlerCompanion(config):
                 dir_order = 'Asc'
 
             self.list_title = "%s %s" % (dir_sort, dir_order)
+            # non standard order here because handler is calling http methods inside the init method up the tree somewhere
+            super(DirectoryHandler, self).__init__(*args, directory=config.web_server_root, **kwargs)
+
+        def log_message(self, msg_format, *args):
+            logging.info("%s - - %s" %
+                         (self.client_address[0],
+                          msg_format % args))
 
         def list_directory(self, path):
             try:
-                list = os.listdir(path)
-                all_entries = len(list)
+                file_list = os.listdir(path)
+                all_entries = len(file_list)
             except os.error:
                 self.send_error(404, "No permission to list directory")
                 return None
 
             if self.config.web_list_by_datetime:
                 # Sort by most recent modified date/time first
-                list.sort(key=lambda x: os.stat(os.path.join(path, x)).st_mtime, reverse=self.config.web_list_sort_descending)
+                file_list.sort(key=lambda x: os.stat(os.path.join(path, x)).st_mtime, reverse=self.config.web_list_sort_descending)
             else:
                 # Sort by File Name
-                list.sort(key=lambda a: a.lower(), reverse=self.config.web_list_sort_descending)
-            f = StringIO()
-            displaypath = cgi.escape(urllib.unquote(self.path))
-            # find index of first file or hyperlink
+                file_list.sort(key=lambda a: a.lower(), reverse=self.config.web_list_sort_descending)
 
             file_found = False
             cnt = 0
-            for entry in list:  # See if there is a file for initializing iframe
+            for entry in file_list:  # See if there is a file for initializing iframe
                 fullname = os.path.join(path, entry)
                 if os.path.islink(fullname) or os.path.isfile(fullname):
                     file_found = True
                     break
                 cnt += 1
 
-            # Start HTML formatting code
-            f.write('<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">')
-            f.write('<head>')
-            # Setup Meta Tags and better viewing on small screen devices
-            f.write('<meta "Content-Type" content="txt/html; charset=ISO-8859-1" />')
-            f.write('<meta name="viewport" content="width=device-width, initial-scale=1.0" />')
-            if self.config.web_page_refresh_on:
-                f.write('<meta http-equiv="refresh" content="%s" />' % self.config.web_page_refresh_sec)
-            f.write('</head>')
+            file_list = list(map(lambda filename: os.path.join(path, filename), file_list))
+            file_list = list(map(map_file, file_list))
+            params = {'refresh_enabled': self.config.web_page_refresh_on,
+                      'refresh_rate': self.config.web_page_refresh_sec,
+                      'title': self.config.web_page_title + " " + self.path,
+                      'iframe_width': self.config.web_iframe_width_usage,
+                      'iframe_height': self.config.web_image_height,
+                      'iframe_src': file_list[cnt]['name'] if file_found else "about:blank",
+                      'iframe_alt': self.config.web_page_title,
+                      'list_height': self.config.web_list_height,
+                      'list_title': self.list_title,
+                      'is_root': self.path is "/",
+                      'files': file_list,
+                      'web_root': self.config.web_server_root,
+                      'web_title': self.config.web_page_title,
+                      'max_list': self.config.web_max_list_entries > 1,
+                      'all_entries': all_entries,
+                      'path': self.path}
 
-            tpath, cur_folder = os.path.split(self.path)
-            f.write("<html><title>%s %s</title>" % (self.config.web_page_title, self.path))
-            f.write("<body>")
-            # Start Left iframe Image Panel
-            f.write('<iframe width="%s" height="%s" align="left"'
-                    % (self.config.web_iframe_width_usage, self.config.web_image_height))
-            if file_found:  # file was display it in left pane
-                f.write('src="%s" name="imgbox" id="imgbox" alt="%s">'
-                        % (list[cnt], self.config.web_page_title))
-            else:  # No files found so blank left pane
-                f.write('src="%s" name="imgbox" id="imgbox" alt="%s">'
-                        % ("about:blank", self.config.web_page_title))
-
-            f.write('<p>iframes are not supported by your browser.</p></iframe>')
-            # Start Right File selection List Panel
-            list_style = '<div style="height: ' + self.config.web_list_height + 'px; overflow: auto; white-space: nowrap;">'
-            f.write(list_style)
-            # f.write('<center><b>%s</b></center>' % (self.path))
-            # Show a refresh button at top of right pane listing
-            refresh_button = ('''<FORM>&nbsp;&nbsp;<INPUT TYPE="button" onClick="history.go(0)"
-    VALUE="Refresh">&nbsp;&nbsp;<b>%s</b></FORM>''' % self.list_title)
-            f.write('%s' % refresh_button)
-            f.write('<ul name="menu" id="menu" style="list-style-type:none; padding-left: 4px">')
-            # Create the formatted list of right panel hyper-links to files in the specified directory
-            if not self.path is "/":   # Display folder Back arrow navigation if not in web root
-                f.write('<li><a href="%s" >%s</a></li>\n'
-                        % (urllib.quote(".."), cgi.escape("< BACK")))
-            display_entries = 0
-            file_found = False
-            for name in list:
-                display_entries += 1
-                if self.config.web_max_list_entries > 1:
-                    if display_entries >= self.config.web_max_list_entries:
-                        break
-                fullname = os.path.join(path, name)
-                displayname = linkname = name
-                date_modified = time.strftime('%H:%M:%S %d-%b-%Y', time.localtime(os.path.getmtime(fullname)))
-                # Append / for directories or @ for symbolic links
-                if os.path.islink(fullname):
-                    displayname = name + "@"  # symbolic link found
-                if os.path.isdir(fullname):   # check if entry is a directory
-                    displayname = name + "/"
-                    linkname = os.path.join(displaypath, displayname)
-                    f.write('<li><a href="%s" >%s</a></li>\n'
-                            % (urllib.quote(linkname), cgi.escape(displayname)))
-                else:
-                    f.write('<li><a href="%s" target="imgbox">%s</a> - %s</li>\n'
-                            % (urllib.quote(linkname), cgi.escape(displayname), date_modified))
-
-            if (not self.path is "/") and display_entries > 35:   # Display folder Back arrow navigation if not in web root
-                f.write('<li><a href="%s" >%s</a></li>\n' % (urllib.quote(".."), cgi.escape("< BACK")))
-            f.write('</ul></div><p><b>')
-            f.write('<div style="float: left; padding-left: 40px;">Web Root = %s</div>' % self.config.web_server_root)
-            f.write('<div style="text-align: center;">%s</div>' % self.config.web_page_title)
-
-            if self.config.web_page_refresh_on:
-                f.write('<div style="float: left; padding-left: 40px;">Auto Refresh = %s sec</div>' % self.config.web_page_refresh_sec)
-
-            if self.config.web_max_list_entries > 1:
-                f.write('<div style="text-align: right; padding-right: 40px;">Listing Only %i of %i Files in %s</div>'
-                        % (display_entries, all_entries, self.path))
-            else:
-                f.write('<div style="text-align: right; padding-right: 50px;">Listing All %i Files in %s</div>'
-                        % (all_entries, self.path))
-            # Display web refresh info only if setting is turned on
-            f.write('</b></p>')
-            length = f.tell()
-            f.seek(0)
+            template_renderer = renderer.Renderer()
+            processed_page = template_renderer.render_path(os.path.join(self.config.base_dir, 'server', 'index.mustache'), params)
+            enc = sys.getfilesystemencoding()
+            encoded = processed_page.encode(enc, 'surrogateescape')
+            out = io.BytesIO()
+            out.write(encoded)
+            length = out.tell()
+            out.seek(0)
             self.send_response(200)
-            encoding = sys.getfilesystemencoding()
-            self.send_header("Content-type", "text/html; charset=%s" % encoding)
+            self.send_header("Content-type", "text/html; charset=%s" % enc)
             self.send_header("Content-Length", str(length))
             self.end_headers()
-            return f
+            return out
     return DirectoryHandler
 
 
 def main():
-    PROG_VER = __version__
-    SCRIPT_PATH = os.path.abspath(__file__)   # Find the full path of this python script
-    BASE_DIR = os.path.dirname(SCRIPT_PATH)   # Get the path location only (excluding script name)
-    PROG_NAME = os.path.basename(__file__)    # Name of this program
+    startup_helpers.init_boot_logger()
+    app_name = os.path.basename(__file__)    # Name of this program
 
     config = Config()
-    os.chdir(config.web_server_root)
-    web_root = os.getcwd()
-    os.chdir(BASE_DIR)
+    startup_helpers.init_logger(config)
 
     try:
         myip = ([l for l in ([ip for ip in socket.gethostbyname_ex(socket.gethostname())[2] if not ip.startswith("127.")][:1],
                              [[(s.connect(('8.8.8.8', 53)),
                                 s.getsockname()[0], s.close()) for s in [socket.socket(socket.AF_INET,
                                                                                        socket.SOCK_DGRAM)]][0][1]]) if l][0][0])
-    except:
-        print("ERROR - Can't Find a Network IP Address on this Raspberry Pi")
-        print("        Configure Network and Try Again")
+    except socket.gaierror:
+        logging.warning("Can't Find a Network IP Address on this Device")
+        logging.warning("Configure Network and Try Again")
         myip = None
 
-    # Start Web Server Processing
-    os.chdir(config.web_server_root)
     socketserver.TCPServer.allow_reuse_address = True
     HandlerClass = DirectoryHandlerCompanion(config)
     httpd = socketserver.TCPServer(("", config.web_server_port), HandlerClass)
+
     print("----------------------------------------------------------------")
-    print("ver %s %s written by Claude Pageau" % (PROG_NAME, PROG_VER))
+    print("ver %s %s written by Claude Pageau" % (app_name, __version__))
     print("---------------------------- Settings --------------------------")
     print("Server  - web_page_title   = %s" % config.web_page_title)
-    print("          web_server_root  = %s/%s" % (BASE_DIR, config.web_server_root))
+    print("          web_server_root  = %s/%s" % (config.base_dir, config.web_server_root))
     print("          web_server_port  = %i " % config.web_server_port)
     print("Content - web_image_height = %s px (height of content)" % config.web_image_height)
     print("          web_iframe_width = %s  web_iframe_height = %s" % (config.web_iframe_width, config.web_iframe_height))
@@ -212,7 +172,7 @@ def main():
     print("From a computer on the same LAN. Use a Web Browser to access this server at")
     print("Type the URL below into the browser url bar then hit enter key.")
     print("")
-    print("                 http://%s:%i"  % (myip, config.web_server_port))
+    print("                 http://%s:%i" % (myip, config.web_server_port))
     print("")
     print("IMPORTANT: If You Get - socket.error: [Errno 98] Address already in use")
     print("           Wait a minute or so for webserver to timeout and Retry.")
@@ -223,7 +183,7 @@ def main():
     except KeyboardInterrupt:
         print("")
         print("User Pressed ctrl-c")
-        print("%s %s" % (PROG_NAME, PROG_VER))
+        print("%s %s" % (app_name, __version__))
         print("Exiting Bye ...")
         httpd.shutdown()
         httpd.socket.close()
@@ -233,5 +193,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset=ISO-8859-1" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        {{#refresh_enabled}}
+        <meta http-equiv="refresh" content="{{refresh_rate}}" />
+        {{/refresh_enabled}}
+        <title>{{title}}</title>
+    </head>
+    <body>
+        <iframe width="{{iframe_width}}" height="{{iframe_height}}" align="left" src="{{iframe_src}}" name="imgbox" id="imgbox" alt="{{iframe_alt}}">
+            <p>iframes are not supported by your browser.</p>
+        </iframe>
+        <div style="height:{{list_height}}px; overflow: auto; white-space: nowrap;">
+            <form>&nbsp;&nbsp;
+                <input type="button" onClick="history.go(0)" value="Refresh">&nbsp;&nbsp;
+                <b>{{list_title}}</b>
+            </form>
+            <ul id="menu" style="list-style-type:none; padding-left: 4px">
+                {{^is_root}}
+                    <li><a href=".." >&lt; BACK</a></li>
+                {{/is_root}}
+                {{#files}}
+                    {{#is_img}}
+                        <li><a href="{{path}}" target="imgbox">{{name}}</a> - {{modified}}</li>
+                    {{/is_img}}
+                    {{^is_img}}
+                        <li><a href="{{path}}" >{{name}}</a></li>
+                    {{/is_img}}
+                {{/files}}
+            </ul>
+        </div>
+        <div>
+            <div style="float: left; padding-left: 40px;"><b>Web Root = {{web_root}}</b></div>
+            <div style="text-align: center;"><b>{{web_title}}</b></div>
+            {{#refresh_enabled}}
+                <div style="float: left; padding-left: 40px;"><b>Auto Refresh = {{refresh_rate}} sec</b></div>
+            {{/refresh_enabled}}
+            {{#max_list}}
+                <div style="text-align: right; padding-right: 40px;"><b>Listing Only {{num_entries}} of {{total_entries}} Files in {{path}}</b></div>
+            {{/max_list}}
+            {{^max_list}}
+                <div style="text-align: right; padding-right: 50px;"><b>Listing All {{total_entries}} Files in {{path}}</b></div>
+            {{/max_list}}
+        </div>
+    </body>
+</html>
